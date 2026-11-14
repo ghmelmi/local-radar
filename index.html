@@ -64,7 +64,7 @@
       background: none;
     }
 
-    button:focus-visible, input:focus-visible, a:focus-visible {
+    button:focus-visible, input:focus-visible, a:focus-visible, select:focus-visible {
       outline: 2px solid var(--accent);
       outline-offset: 2px;
     }
@@ -207,7 +207,7 @@
       width: 7px;
       height: 7px;
       border-radius: 50%;
-      background: var(--amber);
+      background: var(--sky);
     }
 
     .status-dot.live {
@@ -670,6 +670,7 @@
       transform: translateY(8px);
       pointer-events: none;
       transition: opacity 0.2s ease, transform 0.2s ease;
+      max-width: min(440px, calc(100vw - 40px));
     }
 
     .toast.show {
@@ -727,9 +728,9 @@
       </div>
 
       <div class="topbar-actions">
-        <span class="status-pill" id="apiStatusPill" title="Gemini API status">
+        <span class="status-pill" id="apiStatusPill" title="Search & AI status">
           <span class="status-dot" id="apiStatusDot"></span>
-          <span id="apiStatusText">Demo Data</span>
+          <span id="apiStatusText">OSM Live + Demo</span>
         </span>
 
         <div class="segmented" role="tablist" aria-label="View mode">
@@ -803,7 +804,7 @@
           </div>
 
           <button id="btnOpenNow" class="chip active" type="button" title="Filter to open places when hours are known">Open Now</button>
-          <button id="btnLiveQuickTap" class="chip" type="button" title="Use Gemini for up-to-the-minute Quick Tap results">Live Quick-Tap: Off</button>
+          <button id="btnLiveQuickTap" class="chip active" type="button" title="Fetch real-world places via keyless OpenStreetMap Overpass API">OSM Live: On</button>
 
           <span id="loadingIndicator" class="loading-pill">
             <span class="pulse-dot"></span>
@@ -831,7 +832,7 @@
           <span>•</span>
           <span id="metaCountText">12 spots</span>
           <span>•</span>
-          <span id="metaTimeText">Updated just now</span>
+          <span id="metaTimeText">Ready</span>
         </div>
       </div>
 
@@ -852,34 +853,33 @@
   <div id="settingsModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
     <div class="modal">
       <div class="modal-header">
-        <h2 id="settingsModalTitle" class="modal-title">API Keys (Stored Locally)</h2>
+        <h2 id="settingsModalTitle" class="modal-title">API Keys &amp; Verified Models</h2>
         <button id="btnCloseModal" class="btn btn-ghost" type="button">Close</button>
       </div>
       <div class="field">
         <label for="geminiKeyInput">Gemini API Key (Google AI Studio)</label>
         <input id="geminiKeyInput" type="password" placeholder="AIza..." autocomplete="off" />
         <p class="field-hint">
-          Stored strictly in this device's <code>localStorage</code> and never included in GitHub or stamped share links. Tip: you can also open <code>#key=YOUR_KEY</code> once on any device to save it automatically.
+          Powers <strong>Ask Gemini</strong> and <strong>Events (72h)</strong>. Stored strictly in this device's <code>localStorage</code> and never committed to GitHub or included in share links. Open <code>#key=YOUR_KEY</code> once on any device to auto-save and scrub from the URL.
         </p>
       </div>
       <div class="field">
-        <label for="geminiModelSelect">Gemini Model</label>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <label for="geminiModelSelect">Gemini Model (Auto-Discovered from Your Key)</label>
+          <button id="btnRefreshModels" class="btn btn-ghost" type="button" style="padding:2px 8px;min-height:24px;font-size:11px;">Refresh Models</button>
+        </div>
         <select id="geminiModelSelect">
-          <option value="auto">Auto — Highest Available Free Tier (Default: 3.8 Flash)</option>
-          <option value="gemini-3.8-flash">Gemini 3.8 Flash (Highest 3.x Free Tier)</option>
-          <option value="gemini-3.6-flash">Gemini 3.6 Flash (Free Tier)</option>
-          <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite (Free Tier)</option>
-          <option value="gemini-4-hydrogen">Gemini 4 Hydrogen (Fastest 4.x)</option>
-          <option value="gemini-4-argon">Gemini 4 Argon (Paid Tier)</option>
-          <option value="gemini-4-carbon">Gemini 4 Carbon (Paid Tier)</option>
-          <option value="gemini-2.5-flash">Gemini 2.5 Flash (Legacy)</option>
+          <option value="auto">Auto — Best Available Model on Account</option>
         </select>
+        <p class="field-hint" id="modelDiscoveryHint">
+          Save a Gemini API key to dynamically load the exact active models enabled on your project.
+        </p>
       </div>
       <div class="field">
         <label for="googleMapsKeyInput">Google Maps JS API Key (Optional)</label>
         <input id="googleMapsKeyInput" type="password" placeholder="AIza..." autocomplete="off" />
         <p class="field-hint">
-          Optional: enables the Google Maps view toggle. The default Leaflet dark map requires no API key.
+          Optional: enables the Google Maps view toggle. The default Leaflet dark map + OpenStreetMap Quick-Tap require zero API keys.
         </p>
       </div>
       <div class="modal-footer">
@@ -935,8 +935,9 @@
         geminiModel: 'local_radar_gemini_model',
         gmapsKey: 'local_radar_gmaps_key',
         savedSearches: 'local_radar_saved_searches_v1',
-        liveQuickTap: 'local_radar_live_quick_tap',
-        resolvedModel: 'local_radar_resolved_model',
+        osmLive: 'local_radar_osm_live_v1',
+        resolvedModel: 'local_radar_resolved_model_v2',
+        discoveredModels: 'local_radar_discovered_models_v1',
         geoCache: 'local_radar_geo_cache_v1'
       };
 
@@ -1133,11 +1134,12 @@
         activeCategory: 'all',
         customQuery: '',
         places: [...STARTER_PLACES],
-        liveQuickTap: false,
+        osmLive: true,
         dropPinMode: false,
         isSnapshot: false,
         snapshotTimestamp: null,
-        savedSearches: []
+        savedSearches: [],
+        discoveredModels: []
       };
 
       // Map instances
@@ -1160,7 +1162,7 @@
         el.textContent = msg;
         el.classList.add('show');
         clearTimeout(showToast._t);
-        showToast._t = setTimeout(() => el.classList.remove('show'), 2800);
+        showToast._t = setTimeout(() => el.classList.remove('show'), 3600);
       }
 
       function haversineMiles(lat1, lng1, lat2, lng2) {
@@ -1185,28 +1187,19 @@
           .replace(/"/g, '&quot;');
       }
 
-      function updateLiveQuickTapUI() {
+      function updateOsmLiveUI() {
         const btn = $('btnLiveQuickTap');
-        const hasKey = Boolean(storage.get(STORAGE_KEYS.geminiKey));
-        const active = state.liveQuickTap && hasKey;
-        btn.classList.toggle('active', active);
-        btn.textContent = active ? 'Live Quick-Tap: On' : 'Live Quick-Tap: Off';
+        btn.classList.toggle('active', state.osmLive);
+        btn.textContent = state.osmLive ? 'OSM Live: On' : 'OSM Live: Off';
       }
-
-      const DEFAULT_MODEL = 'gemini-3.8-flash';
-      const MODEL_PRIORITY = [
-        'gemini-4-hydrogen',
-        'gemini-3.8-flash',
-        'gemini-3.6-flash',
-        'gemini-3.5-flash-lite',
-        'gemini-2.5-flash'
-      ];
 
       function getActiveModel() {
         const pref = storage.get(STORAGE_KEYS.geminiModel, 'auto');
         if (pref && pref !== 'auto') return pref;
-        const resolved = storage.get(STORAGE_KEYS.resolvedModel, DEFAULT_MODEL);
-        return resolved === 'gemini-2.5-flash' ? DEFAULT_MODEL : resolved;
+        const resolved = storage.get(STORAGE_KEYS.resolvedModel, '');
+        if (resolved) return resolved;
+        if (state.discoveredModels.length > 0) return state.discoveredModels[0].id;
+        return '';
       }
 
       function updateApiStatusUI() {
@@ -1217,63 +1210,254 @@
           dot.classList.remove('live');
           txt.textContent = 'Stamped Snapshot';
         } else if (hasGemini) {
+          const active = getActiveModel();
           dot.classList.add('live');
-          txt.textContent = `Live: ${getActiveModel()}`;
+          txt.textContent = active ? `AI: ${active}` : 'AI Key Saved';
         } else {
           dot.classList.remove('live');
-          txt.textContent = 'Demo Data (Add Key)';
+          txt.textContent = state.osmLive ? 'OSM Keyless Live' : 'Demo Data';
         }
       }
 
-      async function probeBestFreeModel(silent = true) {
-        const apiKey = storage.get(STORAGE_KEYS.geminiKey);
-        if (!apiKey) return;
-        const pref = storage.get(STORAGE_KEYS.geminiModel, 'auto');
-        if (pref && pref !== 'auto') {
-          updateApiStatusUI();
-          return;
+      function renderModelDropdown() {
+        const select = $('geminiModelSelect');
+        const currentPref = storage.get(STORAGE_KEYS.geminiModel, 'auto');
+        const models = state.discoveredModels;
+
+        let html = `<option value="auto">Auto — Best Available Model on Account</option>`;
+        if (models.length > 0) {
+          html += models.map(m => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.displayName || m.id)} (${escapeHtml(m.id)})</option>`).join('');
         }
+        select.innerHTML = html;
+
+        if ([...select.options].some(o => o.value === currentPref)) {
+          select.value = currentPref;
+        } else {
+          select.value = 'auto';
+          storage.set(STORAGE_KEYS.geminiModel, 'auto');
+        }
+
+        const hint = $('modelDiscoveryHint');
+        if (models.length > 0) {
+          hint.textContent = `Discovered ${models.length} active text-generation models on your API key. Active: ${getActiveModel()}.`;
+        } else {
+          hint.textContent = 'Save a Gemini API key to dynamically load the exact active models enabled on your project.';
+        }
+      }
+
+      // Dynamically discover real active models from GET /v1beta/models
+      async function discoverGeminiModels(silent = true) {
+        const apiKey = storage.get(STORAGE_KEYS.geminiKey);
+        if (!apiKey) {
+          state.discoveredModels = [];
+          renderModelDropdown();
+          updateApiStatusUI();
+          return [];
+        }
+
         try {
-          let availableSet = null;
-          const listResp = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
+          const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=100', {
             headers: { 'x-goog-api-key': apiKey }
           });
-          if (listResp.ok) {
-            const listData = await listResp.json();
-            availableSet = new Set((listData.models || []).map(m => (m.name || '').replace(/^models\//, '')));
+
+          if (!resp.ok) {
+            const errData = await resp.json().catch(() => ({}));
+            const msg = errData.error?.message || `HTTP ${resp.status}`;
+            if (!silent) showToast(`Model discovery error: ${msg}`);
+            return [];
           }
 
-          const candidates = availableSet
-            ? MODEL_PRIORITY.filter(m => availableSet.has(m))
-            : [...MODEL_PRIORITY];
-          if (!candidates.includes(DEFAULT_MODEL)) candidates.unshift(DEFAULT_MODEL);
+          const data = await resp.json();
+          const rawModels = Array.isArray(data.models) ? data.models : [];
 
-          for (const model of candidates) {
+          // Keep only text-generation Gemini models (exclude embeddings, imagen, veo, audio-only, etc.)
+          const usable = rawModels
+            .filter(m => {
+              const id = (m.name || '').replace(/^models\//, '');
+              const methods = m.supportedGenerationMethods || [];
+              if (!methods.includes('generateContent')) return false;
+              if (!/^gemini-/i.test(id)) return false;
+              if (/embedding|imagen|veo|tts|audio|robotics|computer-use|deep-research/i.test(id)) return false;
+              return true;
+            })
+            .map(m => ({
+              id: (m.name || '').replace(/^models\//, ''),
+              displayName: m.displayName || (m.name || '').replace(/^models\//, '')
+            }));
+
+          // Rank newest flash models first, then pro models, then everything else
+          usable.sort((a, b) => {
+            const score = (id) => {
+              let s = 0;
+              if (/flash/i.test(id)) s += 50;
+              if (/lite/i.test(id)) s -= 5;
+              if (/exp|preview/i.test(id)) s -= 2;
+              const verMatch = id.match(/gemini-(\d+(?:\.\d+)?)/i);
+              if (verMatch) s += parseFloat(verMatch[1]) * 100;
+              return s;
+            };
+            return score(b.id) - score(a.id);
+          });
+
+          state.discoveredModels = usable;
+          storage.set(STORAGE_KEYS.discoveredModels, JSON.stringify(usable));
+
+          if (usable.length > 0) {
+            const savedResolved = storage.get(STORAGE_KEYS.resolvedModel, '');
+            if (!savedResolved || !usable.some(m => m.id === savedResolved)) {
+              storage.set(STORAGE_KEYS.resolvedModel, usable[0].id);
+            }
+          }
+
+          renderModelDropdown();
+          updateApiStatusUI();
+          if (!silent && usable.length > 0) {
+            showToast(`Loaded ${usable.length} active models • Auto selected ${getActiveModel()}`);
+          }
+          return usable;
+        } catch (err) {
+          if (!silent) showToast(`Could not list models: ${err.message}`);
+          return [];
+        }
+      }
+
+      // Keyless OpenStreetMap Overpass API for Quick-Tap categories anywhere in the world
+      const OVERPASS_ENDPOINTS = [
+        'https://overpass-api.de/api/interpreter',
+        'https://overpass.kumi.systems/api/interpreter'
+      ];
+
+      function buildOverpassQuery(lat, lng, radiusMeters, category) {
+        const r = Math.round(radiusMeters);
+        const filters = {
+          'Gas Station': `
+            nwr["amenity"="fuel"](around:${r},${lat},${lng});
+          `,
+          'Bars': `
+            nwr["amenity"~"^(bar|pub|biergarten|nightclub)$"](around:${r},${lat},${lng});
+          `,
+          'Dining': `
+            nwr["amenity"~"^(restaurant|cafe|fast_food|food_court)$"](around:${r},${lat},${lng});
+          `,
+          'Parks': `
+            nwr["leisure"~"^(park|nature_reserve|garden|dog_park)$"](around:${r},${lat},${lng});
+          `,
+          'all': `
+            nwr["amenity"~"^(restaurant|cafe|bar|pub|fuel)$"](around:${r},${lat},${lng});
+            nwr["leisure"="park"](around:${r},${lat},${lng});
+          `
+        };
+        const body = filters[category] || filters['all'];
+        return `[out:json][timeout:14];(${body});out center 60;`;
+      }
+
+      function mapOsmElementToPlace(el, requestedCategory) {
+        const tags = el.tags || {};
+        const name = tags.name || tags.brand || tags.operator;
+        if (!name) return null;
+
+        const lat = el.lat !== undefined ? el.lat : el.center?.lat;
+        const lng = el.lon !== undefined ? el.lon : el.center?.lon;
+        if (!lat || !lng) return null;
+
+        let category = requestedCategory;
+        if (requestedCategory === 'all') {
+          if (tags.amenity === 'fuel') category = 'Gas Station';
+          else if (/bar|pub|biergarten|nightclub/.test(tags.amenity || '')) category = 'Bars';
+          else if (tags.leisure) category = 'Parks';
+          else category = 'Dining';
+        }
+
+        const street = [tags['addr:housenumber'], tags['addr:street']].filter(Boolean).join(' ');
+        const city = tags['addr:city'] || '';
+        const address = [street, city].filter(Boolean).join(', ');
+
+        const cuisine = tags.cuisine ? tags.cuisine.replace(/;/g, ', ').replace(/_/g, ' ') : '';
+        const subType = tags.amenity || tags.leisure || '';
+        const descParts = [];
+        if (cuisine) descParts.push(`Cuisine: ${cuisine}`);
+        else if (subType) descParts.push(subType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
+        if (tags.outdoor_seating === 'yes') descParts.push('Outdoor seating');
+        if (tags.opening_hours) descParts.push(`Hours: ${tags.opening_hours}`);
+
+        return {
+          id: `osm-${el.type}-${el.id}`,
+          name,
+          category,
+          lat: Number(lat),
+          lng: Number(lng),
+          address,
+          rating: '',
+          hours: tags.opening_hours || '',
+          isOpen: true,
+          coordVerified: true,
+          description: descParts.join(' • ') || `${category} near ${state.center.label}`
+        };
+      }
+
+      async function runOverpassSearch(category) {
+        const loading = $('loadingIndicator');
+        loading.classList.add('active');
+
+        const radiusMeters = state.radiusMiles * 1609.34;
+        const query = buildOverpassQuery(state.center.lat, state.center.lng, radiusMeters, category);
+
+        try {
+          let data = null;
+          let lastErr = null;
+
+          for (const endpoint of OVERPASS_ENDPOINTS) {
             try {
-              const r = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-                {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-                  body: JSON.stringify({
-                    contents: [{ role: 'user', parts: [{ text: 'ok' }] }],
-                    generationConfig: { maxOutputTokens: 1 }
-                  })
-                }
-              );
-              if (r.ok) {
-                storage.set(STORAGE_KEYS.resolvedModel, model);
-                updateApiStatusUI();
-                if (!silent) showToast(`Connected: ${model}`);
-                return;
-              }
-            } catch {}
+              const controller = new AbortController();
+              const timer = setTimeout(() => controller.abort(), 12000);
+              const resp = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+                body: `data=${encodeURIComponent(query)}`,
+                signal: controller.signal
+              });
+              clearTimeout(timer);
+              if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+              data = await resp.json();
+              break;
+            } catch (err) {
+              lastErr = err;
+            }
           }
-          storage.set(STORAGE_KEYS.resolvedModel, DEFAULT_MODEL);
-          updateApiStatusUI();
-        } catch {
-          storage.set(STORAGE_KEYS.resolvedModel, DEFAULT_MODEL);
-          updateApiStatusUI();
+
+          if (!data || !Array.isArray(data.elements)) {
+            throw lastErr || new Error('Overpass unavailable');
+          }
+
+          const seen = new Set();
+          const mapped = [];
+          for (const el of data.elements) {
+            const p = mapOsmElementToPlace(el, category);
+            if (!p) continue;
+            const dedupKey = `${p.name.toLowerCase()}|${p.lat.toFixed(3)}|${p.lng.toFixed(3)}`;
+            if (seen.has(dedupKey)) continue;
+            seen.add(dedupKey);
+            mapped.push(p);
+          }
+
+          if (mapped.length === 0) {
+            showToast(`No OSM ${category === 'all' ? 'places' : category} found in ${state.radiusMiles} mi — try 6 mi.`);
+            state.places = [];
+          } else {
+            state.places = mapped;
+          }
+
+          state.customQuery = '';
+          state.activeCategory = category;
+          renderAll();
+        } catch (err) {
+          state.customQuery = '';
+          state.activeCategory = category;
+          state.places = [...STARTER_PLACES];
+          renderAll();
+          showToast(`OSM busy — showing local starter pins (${err.message})`);
+        } finally {
+          loading.classList.remove('active');
         }
       }
 
@@ -1319,9 +1503,7 @@
           if (!state.dropPinMode) return;
           setCenter(e.latlng.lat, e.latlng.lng, `Pinned (${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)})`);
           toggleDropPin(false);
-          if (state.customQuery && storage.get(STORAGE_KEYS.geminiKey)) {
-            runGeminiSearch(state.customQuery);
-          }
+          refreshCurrentSearch();
         });
       }
 
@@ -1431,6 +1613,7 @@
             if (!state.dropPinMode) return;
             setCenter(e.latLng.lat(), e.latLng.lng(), `Pinned (${e.latLng.lat().toFixed(4)}, ${e.latLng.lng().toFixed(4)})`);
             toggleDropPin(false);
+            refreshCurrentSearch();
           });
         }
 
@@ -1569,12 +1752,22 @@
 
         renderList(items);
         updateApiStatusUI();
-        updateLiveQuickTapUI();
+        updateOsmLiveUI();
       }
 
       function setCenter(lat, lng, label) {
         state.center = { lat, lng, label };
         renderAll();
+      }
+
+      function refreshCurrentSearch() {
+        if (state.customQuery) {
+          runGeminiSearch(state.customQuery);
+        } else if (state.activeCategory === 'Local Events') {
+          runGeminiSearch('', 'Local Events');
+        } else if (state.osmLive) {
+          runOverpassSearch(state.activeCategory);
+        }
       }
 
       function toggleDropPin(active) {
@@ -1586,24 +1779,22 @@
         }
       }
 
-      // Gemini Live Search (with Google Search grounding & automatic deprecation/quota fallback)
+      // Gemini Live Search (uses dynamically discovered models from your key)
       async function runGeminiSearch(promptText, categoryOverride = null) {
         const apiKey = storage.get(STORAGE_KEYS.geminiKey);
         if (!apiKey) {
-          showToast('Demo Data — tap "Keys" in top right to add your Gemini API key.');
+          showToast('Tap "Keys" in the top right to add your Gemini API key for AI & 72h Events.');
           if (categoryOverride) {
             state.customQuery = '';
             state.activeCategory = categoryOverride;
+            state.places = [...STARTER_PLACES];
           } else {
             state.customQuery = promptText;
             const q = promptText.toLowerCase();
             const matched = STARTER_PLACES.filter(p =>
               p.name.toLowerCase().includes(q) ||
               p.description.toLowerCase().includes(q) ||
-              p.category.toLowerCase().includes(q) ||
-              (q.includes('vegan') && p.name.includes('Tacubaya')) ||
-              (q.includes('view') && (p.name.includes('Chávez') || p.name.includes('Rose'))) ||
-              (q.includes('date') && (p.category === 'Bars' || p.name.includes('East Bay Spice')))
+              p.category.toLowerCase().includes(q)
             );
             state.places = matched.length > 0 ? matched : [...STARTER_PLACES];
           }
@@ -1614,17 +1805,26 @@
         const loading = $('loadingIndicator');
         loading.classList.add('active');
 
-        const nowIso = new Date().toISOString();
-        const countTarget = state.density;
-        const userIntent = categoryOverride
-          ? (categoryOverride === 'all'
-              ? `Find a balanced, up-to-the-minute mix of top-rated Dining, Bars, Parks, Gas Stations, and Local Events happening between NOW (${nowIso}) and 72 hours from now`
-              : (categoryOverride === 'Local Events'
-                  ? `Find real local events happening between NOW (${nowIso}) and 72 hours from now`
-                  : `Find real, up-to-the-minute ${categoryOverride} locations with current hours`))
-          : promptText;
+        try {
+          if (state.discoveredModels.length === 0) {
+            await discoverGeminiModels(true);
+          }
 
-        const systemPrompt = `You are a precise local discovery engine.
+          const primary = getActiveModel();
+          const discoveredIds = state.discoveredModels.map(m => m.id);
+          const tryOrder = [...new Set([primary, ...discoveredIds].filter(Boolean))];
+
+          if (tryOrder.length === 0) {
+            throw new Error('No active Gemini models found for this API key. Check Keys -> Refresh Models.');
+          }
+
+          const nowIso = new Date().toISOString();
+          const countTarget = state.density;
+          const userIntent = categoryOverride === 'Local Events'
+            ? `Find real local events happening between NOW (${nowIso}) and 72 hours from now`
+            : promptText;
+
+          const systemPrompt = `You are a precise local discovery engine.
 Center coordinates: ${state.center.lat.toFixed(5)}, ${state.center.lng.toFixed(5)} (${state.center.label}).
 Search radius: ${state.radiusMiles} miles.
 Target count: up to ${countTarget} high-signal results.
@@ -1642,78 +1842,81 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
 - "isOpen": boolean
 - "description": string (concise 1-2 line description)`;
 
-        const primaryModel = getActiveModel();
-        const tryOrder = [primaryModel, ...MODEL_PRIORITY.filter(m => m !== primaryModel)];
-        let lastErr = null;
+          let firstErrorMsg = null;
 
-        try {
           for (const model of tryOrder) {
-            const resp = await fetch(
-              `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'x-goog-api-key': apiKey
-                },
-                body: JSON.stringify({
-                  contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nQuery: ${userIntent}` }] }],
-                  tools: [{ google_search: {} }],
-                  generationConfig: { temperature: 0.2 }
-                })
+            // Try with Google Search grounding first, then without grounding if key lacks Search Grounding permission
+            for (const useGrounding of [true, false]) {
+              const payload = {
+                contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nQuery: ${userIntent}` }] }],
+                generationConfig: { temperature: 0.2 }
+              };
+              if (useGrounding) {
+                payload.tools = [{ google_search: {} }];
               }
-            );
 
-            if (!resp.ok) {
-              const errData = await resp.json().catch(() => ({}));
-              const msg = errData.error?.message || `HTTP ${resp.status}`;
-              lastErr = new Error(msg);
-              if (
-                resp.status === 400 ||
-                resp.status === 429 ||
-                resp.status === 404 ||
-                /quota|exceeded|not found|no longer available|deprecated/i.test(msg)
-              ) {
-                continue;
+              const resp = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': apiKey
+                  },
+                  body: JSON.stringify(payload)
+                }
+              );
+
+              if (!resp.ok) {
+                const errData = await resp.json().catch(() => ({}));
+                const msg = errData.error?.message || `HTTP ${resp.status}`;
+                if (!firstErrorMsg) firstErrorMsg = `${model}: ${msg}`;
+                // If grounding tool itself caused a 400 on this model, retry same model without grounding
+                if (useGrounding && resp.status === 400) continue;
+                break;
               }
-              throw lastErr;
+
+              const data = await resp.json();
+              const rawText = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
+              const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+              if (!jsonMatch) {
+                if (!firstErrorMsg) firstErrorMsg = `${model}: non-JSON response`;
+                break;
+              }
+
+              const parsed = JSON.parse(jsonMatch[0]);
+              if (!Array.isArray(parsed) || parsed.length === 0) {
+                if (!firstErrorMsg) firstErrorMsg = `${model}: empty results`;
+                break;
+              }
+
+              if (storage.get(STORAGE_KEYS.geminiModel, 'auto') === 'auto') {
+                storage.set(STORAGE_KEYS.resolvedModel, model);
+              }
+
+              state.places = parsed.map((item, idx) => ({
+                id: `gem-${Date.now()}-${idx}`,
+                name: String(item.name || 'Unnamed Spot'),
+                category: item.category || categoryOverride || 'Custom',
+                lat: Number(item.lat) || state.center.lat,
+                lng: Number(item.lng) || state.center.lng,
+                address: String(item.address || ''),
+                rating: String(item.rating || ''),
+                hours: String(item.hours || ''),
+                isOpen: item.isOpen !== false,
+                description: String(item.description || '')
+              }));
+
+              state.customQuery = categoryOverride ? '' : promptText;
+              if (categoryOverride) state.activeCategory = categoryOverride;
+              renderAll();
+              showToast(`Found ${state.places.length} results via ${model} — verifying pins...`);
+              verifyPlacesCoordinates(state.places);
+              return;
             }
-
-            const data = await resp.json();
-            const rawText = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
-            const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-            if (!jsonMatch) throw new Error('Gemini did not return structured locations');
-
-            const parsed = JSON.parse(jsonMatch[0]);
-            if (!Array.isArray(parsed) || parsed.length === 0) {
-              throw new Error('No locations returned for this query');
-            }
-
-            if (storage.get(STORAGE_KEYS.geminiModel, 'auto') === 'auto') {
-              storage.set(STORAGE_KEYS.resolvedModel, model);
-            }
-
-            state.places = parsed.map((item, idx) => ({
-              id: `gem-${Date.now()}-${idx}`,
-              name: String(item.name || 'Unnamed Spot'),
-              category: item.category || categoryOverride || 'Custom',
-              lat: Number(item.lat) || state.center.lat,
-              lng: Number(item.lng) || state.center.lng,
-              address: String(item.address || ''),
-              rating: String(item.rating || ''),
-              hours: String(item.hours || ''),
-              isOpen: item.isOpen !== false,
-              description: String(item.description || '')
-            }));
-
-            state.customQuery = categoryOverride ? '' : promptText;
-            if (categoryOverride) state.activeCategory = categoryOverride;
-            renderAll();
-            showToast(`Found ${state.places.length} live results via ${model} — verifying pins...`);
-            verifyPlacesCoordinates(state.places);
-            return;
           }
-          throw lastErr || new Error('All Gemini models hit quota or availability limits');
+
+          throw new Error(firstErrorMsg || 'All discovered models failed');
         } catch (err) {
           if (categoryOverride) {
             state.customQuery = '';
@@ -1721,7 +1924,7 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
             state.places = [...STARTER_PLACES];
             renderAll();
           }
-          showToast(`API notice — showing local data (${err.message})`);
+          showToast(`Gemini API error: ${err.message}`);
         } finally {
           loading.classList.remove('active');
         }
@@ -1840,7 +2043,7 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
         const newGeminiKey = params.get('key') || params.get('geminikey');
         if (newGeminiKey && newGeminiKey.trim().length > 10) {
           storage.set(STORAGE_KEYS.geminiKey, newGeminiKey.trim());
-          storage.set(STORAGE_KEYS.liveQuickTap, 'true');
+          storage.remove(STORAGE_KEYS.resolvedModel);
           provisioned = true;
         }
 
@@ -1959,9 +2162,7 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
             const r = results[0];
             setCenter(parseFloat(r.lat), parseFloat(r.lon), r.display_name.split(',').slice(0, 2).join(','));
             showToast(`Centered on ${state.center.label}`);
-            if (state.customQuery && storage.get(STORAGE_KEYS.geminiKey)) {
-              runGeminiSearch(state.customQuery);
-            }
+            refreshCurrentSearch();
           } else {
             showToast('Address not found — try Drop Pin on the map.');
           }
@@ -1979,7 +2180,7 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
         $('btnEngineLeaflet').addEventListener('click', () => setMapEngine('leaflet'));
         $('btnEngineGoogle').addEventListener('click', () => setMapEngine('google'));
 
-        // Quick Tap categories
+        // Quick Tap categories: OSM Overpass for standard categories, Gemini for Events (72h)
         $('quickTapRow').addEventListener('click', (e) => {
           const btn = e.target.closest('button[data-cat]');
           if (!btn) return;
@@ -1989,8 +2190,10 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
           state.customQuery = '';
           state.activeCategory = cat;
 
-          if (state.liveQuickTap && storage.get(STORAGE_KEYS.geminiKey)) {
-            runGeminiSearch('', cat);
+          if (cat === 'Local Events') {
+            runGeminiSearch('', 'Local Events');
+          } else if (state.osmLive) {
+            runOverpassSearch(cat);
           } else {
             state.places = [...STARTER_PLACES];
             renderAll();
@@ -2004,6 +2207,9 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
             btn.classList.add('active');
             state.radiusMiles = Number(btn.dataset.miles);
             renderAll();
+            if (!state.customQuery && state.activeCategory !== 'Local Events' && state.osmLive) {
+              runOverpassSearch(state.activeCategory);
+            }
           });
         });
 
@@ -2017,20 +2223,19 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
           });
         });
 
-        // Live Quick-Tap toggle
+        // OSM Live toggle
         $('btnLiveQuickTap').addEventListener('click', () => {
-          const hasKey = Boolean(storage.get(STORAGE_KEYS.geminiKey));
-          if (!state.liveQuickTap && !hasKey) {
-            showToast('Add your Gemini API key in Keys to enable Live Quick-Tap.');
-            $('settingsModal').classList.add('open');
-            return;
-          }
-          state.liveQuickTap = !state.liveQuickTap;
-          storage.set(STORAGE_KEYS.liveQuickTap, String(state.liveQuickTap));
-          updateLiveQuickTapUI();
-          showToast(state.liveQuickTap ? 'Live Quick-Tap enabled' : 'Live Quick-Tap paused (using local data)');
-          if (state.liveQuickTap && !state.customQuery) {
-            runGeminiSearch('', state.activeCategory);
+          state.osmLive = !state.osmLive;
+          storage.set(STORAGE_KEYS.osmLive, String(state.osmLive));
+          updateOsmLiveUI();
+          updateApiStatusUI();
+          showToast(state.osmLive ? 'OSM Keyless Live enabled' : 'OSM Live off (showing local Berkeley pins)');
+          if (!state.customQuery && state.activeCategory !== 'Local Events') {
+            if (state.osmLive) runOverpassSearch(state.activeCategory);
+            else {
+              state.places = [...STARTER_PLACES];
+              renderAll();
+            }
           }
         });
 
@@ -2093,7 +2298,7 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
             } else {
               state.customQuery = '';
               state.activeCategory = item.category || 'all';
-              renderAll();
+              refreshCurrentSearch();
             }
           }
         });
@@ -2108,6 +2313,7 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
             (pos) => {
               setCenter(pos.coords.latitude, pos.coords.longitude, 'Current Location');
               showToast('Centered on your GPS location');
+              refreshCurrentSearch();
             },
             () => showToast('Location permission denied — use Address or Drop Pin.')
           );
@@ -2127,39 +2333,44 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
         // Settings Modal
         $('btnSettings').addEventListener('click', () => {
           $('geminiKeyInput').value = storage.get(STORAGE_KEYS.geminiKey, '');
-          $('geminiModelSelect').value = storage.get(STORAGE_KEYS.geminiModel, 'auto');
           $('googleMapsKeyInput').value = storage.get(STORAGE_KEYS.gmapsKey, '');
+          renderModelDropdown();
           $('settingsModal').classList.add('open');
         });
         $('btnCloseModal').addEventListener('click', () => $('settingsModal').classList.remove('open'));
-        $('btnSaveKeys').addEventListener('click', () => {
+        $('btnRefreshModels').addEventListener('click', async () => {
+          const typedKey = $('geminiKeyInput').value.trim();
+          if (typedKey) storage.set(STORAGE_KEYS.geminiKey, typedKey);
+          await discoverGeminiModels(false);
+        });
+        $('btnSaveKeys').addEventListener('click', async () => {
           const gKey = $('geminiKeyInput').value.trim();
           const gModel = $('geminiModelSelect').value;
           const mKey = $('googleMapsKeyInput').value.trim();
           if (gKey) {
             storage.set(STORAGE_KEYS.geminiKey, gKey);
-            if (storage.get(STORAGE_KEYS.liveQuickTap) === null) {
-              storage.set(STORAGE_KEYS.liveQuickTap, 'true');
-              state.liveQuickTap = true;
-            }
           } else {
             storage.remove(STORAGE_KEYS.geminiKey);
+            storage.remove(STORAGE_KEYS.resolvedModel);
+            storage.remove(STORAGE_KEYS.discoveredModels);
           }
           storage.set(STORAGE_KEYS.geminiModel, gModel);
           if (mKey) storage.set(STORAGE_KEYS.gmapsKey, mKey); else storage.remove(STORAGE_KEYS.gmapsKey);
           $('settingsModal').classList.remove('open');
           updateApiStatusUI();
-          updateLiveQuickTapUI();
-          showToast('API keys saved locally to this browser');
-          probeBestFreeModel(false);
+          showToast('Keys saved locally');
+          if (gKey) await discoverGeminiModels(false);
         });
         $('btnClearKeys').addEventListener('click', () => {
           storage.remove(STORAGE_KEYS.geminiKey);
           storage.remove(STORAGE_KEYS.gmapsKey);
+          storage.remove(STORAGE_KEYS.resolvedModel);
+          storage.remove(STORAGE_KEYS.discoveredModels);
+          state.discoveredModels = [];
           $('geminiKeyInput').value = '';
           $('googleMapsKeyInput').value = '';
+          renderModelDropdown();
           updateApiStatusUI();
-          updateLiveQuickTapUI();
           showToast('Local keys cleared');
         });
 
@@ -2210,14 +2421,26 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
       // Boot
       window.addEventListener('DOMContentLoaded', () => {
         checkHashKeyProvisioning();
-        state.liveQuickTap = storage.get(STORAGE_KEYS.liveQuickTap) === 'true';
+        const savedOsm = storage.get(STORAGE_KEYS.osmLive);
+        state.osmLive = savedOsm === null ? true : savedOsm === 'true';
+
+        try {
+          state.discoveredModels = JSON.parse(storage.get(STORAGE_KEYS.discoveredModels, '[]')) || [];
+        } catch { state.discoveredModels = []; }
+
         bindEvents();
         loadSavedSearches();
+        renderModelDropdown();
         checkHashSnapshot();
         renderAll();
+
         if (!state.isSnapshot) {
-          probeBestFreeModel(true);
-          verifyPlacesCoordinates(state.places);
+          discoverGeminiModels(true);
+          if (state.osmLive) {
+            runOverpassSearch('all');
+          } else {
+            verifyPlacesCoordinates(state.places);
+          }
         }
       });
     })();
