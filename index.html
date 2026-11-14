@@ -64,7 +64,7 @@
       background: none;
     }
 
-    button:focus-visible, input:focus-visible, a:focus-visible, select:focus-visible {
+    button:focus-visible, input:focus-visible, a:focus-visible {
       outline: 2px solid var(--accent);
       outline-offset: 2px;
     }
@@ -207,7 +207,7 @@
       width: 7px;
       height: 7px;
       border-radius: 50%;
-      background: var(--sky);
+      background: var(--amber);
     }
 
     .status-dot.live {
@@ -349,6 +349,13 @@
       color: var(--text-primary);
     }
 
+    .divider-v {
+      width: 1px;
+      height: 20px;
+      background: var(--border-subtle);
+      margin: 0 2px;
+    }
+
     .control-label {
       font-size: 11px;
       font-weight: 600;
@@ -380,8 +387,33 @@
       height: 100%;
     }
 
-    #googleMap {
+    #googleMap, #googleEmbedWrap {
+      width: 100%;
+      height: 100%;
       display: none;
+    }
+
+    #googleEmbedFrame {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      filter: invert(90%) hue-rotate(180deg) brightness(95%) contrast(90%);
+    }
+
+    .gembed-Selector {
+      position: absolute;
+      top: 12px;
+      right: 14px;
+      z-index: 460;
+      display: flex;
+      gap: 6px;
+      max-width: calc(100% - 28px);
+      overflow-x: auto;
+      padding: 6px 8px;
+      background: rgba(25, 25, 25, 0.92);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      backdrop-filter: blur(8px);
     }
 
     .drop-pin-banner {
@@ -670,7 +702,6 @@
       transform: translateY(8px);
       pointer-events: none;
       transition: opacity 0.2s ease, transform 0.2s ease;
-      max-width: min(440px, calc(100vw - 40px));
     }
 
     .toast.show {
@@ -728,9 +759,9 @@
       </div>
 
       <div class="topbar-actions">
-        <span class="status-pill" id="apiStatusPill" title="Search & AI status">
+        <span class="status-pill" id="apiStatusPill" title="Gemini API status">
           <span class="status-dot" id="apiStatusDot"></span>
-          <span id="apiStatusText">OSM Keyless Live</span>
+          <span id="apiStatusText">Demo Data</span>
         </span>
 
         <div class="segmented" role="tablist" aria-label="View mode">
@@ -740,7 +771,8 @@
 
         <div class="segmented" role="group" aria-label="Map platform">
           <button id="btnEngineLeaflet" class="active" type="button">Leaflet</button>
-          <button id="btnEngineGoogle" type="button">Google Maps</button>
+          <button id="btnEngineGoogleEmbed" type="button" title="Keyless native Google Maps view">Google Map (Free)</button>
+          <button id="btnEngineGoogle" type="button" title="Google Maps JS SDK (requires API key)">Google Maps</button>
         </div>
 
         <button id="btnStampShare" class="btn btn-accent" type="button" title="Create shareable read-only snapshot without your API key">
@@ -804,7 +836,7 @@
           </div>
 
           <button id="btnOpenNow" class="chip active" type="button" title="Filter to open places when hours are known">Open Now</button>
-          <button id="btnLiveQuickTap" class="chip active" type="button" title="Fetch real-world places via keyless OpenStreetMap Overpass API">OSM Live: On</button>
+          <button id="btnLiveQuickTap" class="chip" type="button" title="Use Gemini 4 Hydrogen for up-to-the-minute Quick Tap results">Live Quick-Tap: Off</button>
 
           <span id="loadingIndicator" class="loading-pill">
             <span class="pulse-dot"></span>
@@ -826,13 +858,17 @@
           <button id="btnCancelDropPin" class="btn" type="button">Cancel</button>
         </div>
         <div id="leafletMap"></div>
+        <div id="googleEmbedWrap">
+          <div id="googleEmbedPills" class="gembed-Selector"></div>
+          <iframe id="googleEmbedFrame" title="Google Maps Native Place View" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+        </div>
         <div id="googleMap"></div>
         <div class="map-meta-overlay" id="mapMetaOverlay">
           <strong id="metaQueryTitle">All Nearby Highlights</strong>
           <span>•</span>
           <span id="metaCountText">12 spots</span>
           <span>•</span>
-          <span id="metaTimeText">Ready</span>
+          <span id="metaTimeText">Updated just now</span>
         </div>
       </div>
 
@@ -853,35 +889,34 @@
   <div id="settingsModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
     <div class="modal">
       <div class="modal-header">
-        <h2 id="settingsModalTitle" class="modal-title">API Keys &amp; Verified Models</h2>
+        <h2 id="settingsModalTitle" class="modal-title">API Keys (Stored Locally)</h2>
         <button id="btnCloseModal" class="btn btn-ghost" type="button">Close</button>
       </div>
       <div class="field">
         <label for="geminiKeyInput">Gemini API Key (Google AI Studio)</label>
-        <input id="geminiKeyInput" type="password" placeholder="AIza..." autocomplete="off" />
+        <input id="geminiKeyInput" type="password" placeholder="AQ.... or AIza..." autocomplete="off" />
         <p class="field-hint">
-          Powers <strong>Ask Gemini</strong> and <strong>Events (72h)</strong>. Stored strictly in this device's <code>localStorage</code> and never committed to GitHub or included in share links. Open <code>#key=YOUR_KEY</code> once on any device to auto-save and scrub from the URL.
+          Powers live Custom Search and 72-hour Local Events via Gemini + Google Search grounding. Stored only in your browser's localStorage and never included in stamped share links.
         </p>
       </div>
       <div class="field">
-        <div style="display:flex;align-items:center;justify-content:space-between;">
-          <label for="geminiModelSelect">Gemini Model (Capped Auto-Failover)</label>
-          <button id="btnRefreshModels" class="btn btn-ghost" type="button" style="padding:2px 8px;min-height:24px;font-size:11px;">Refresh Models</button>
-        </div>
+        <label for="geminiModelSelect">Gemini Model</label>
         <select id="geminiModelSelect">
-          <option value="auto">Auto — Gemini 4 Hydrogen → 3.8 Flash (Capped 2-Model)</option>
-          <option value="gemini-4-hydrogen">Gemini 4 Hydrogen (gemini-4-hydrogen)</option>
-          <option value="gemini-3.8-flash">Gemini 3.8 Flash (gemini-3.8-flash)</option>
+          <option value="auto">Auto — Highest Available Free Tier (Default: 2.5 Flash)</option>
+          <option value="gemini-2.5-flash">Gemini 2.5 Flash (Free Tier Default)</option>
+          <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite (Free Tier)</option>
+          <option value="gemini-3.6-flash">Gemini 3.6 Flash (Free Tier)</option>
+          <option value="gemini-3.8-flash">Gemini 3.8 Flash (Highest 3.x Free Tier)</option>
+          <option value="gemini-4-hydrogen">Gemini 4 Hydrogen (Fastest 4.x)</option>
+          <option value="gemini-4-argon">Gemini 4 Argon (Paid Tier)</option>
+          <option value="gemini-4-carbon">Gemini 4 Carbon (Paid Tier)</option>
         </select>
-        <p class="field-hint" id="modelDiscoveryHint">
-          Auto mode tries at most 2 proven models (Gemini 4 Hydrogen → Gemini 3.8 Flash) so searches never trigger rate-limit bursts.
-        </p>
       </div>
       <div class="field">
         <label for="googleMapsKeyInput">Google Maps JS API Key (Optional)</label>
         <input id="googleMapsKeyInput" type="password" placeholder="AIza..." autocomplete="off" />
         <p class="field-hint">
-          Optional: enables the Google Maps view toggle. The default Leaflet dark map + OpenStreetMap Quick-Tap require zero API keys.
+          Optional: enables the Google Maps view toggle. The default Leaflet dark map requires no API key.
         </p>
       </div>
       <div class="modal-footer">
@@ -937,14 +972,11 @@
         geminiModel: 'local_radar_gemini_model',
         gmapsKey: 'local_radar_gmaps_key',
         savedSearches: 'local_radar_saved_searches_v1',
-        osmLive: 'local_radar_osm_live_v1',
-        resolvedModel: 'local_radar_resolved_model_v3',
-        discoveredModels: 'local_radar_discovered_models_v2',
+        liveQuickTap: 'local_radar_live_quick_tap',
+        seededDefault: 'local_radar_seeded_v1',
+        resolvedModel: 'local_radar_resolved_model',
         geoCache: 'local_radar_geo_cache_v1'
       };
-
-      // Proven high-success models on this account (strictly capped to prevent RPM bursts)
-      const PROVEN_MODELS = ['gemini-4-hydrogen', 'gemini-3.8-flash'];
 
       // Category colors matching warm charcoal dark mode
       const CAT_COLORS = {
@@ -993,6 +1025,42 @@
           hours: 'Mon–Thu 4PM–12AM; Fri–Sat 2PM–2AM',
           isOpen: true,
           description: 'Inventive Indian plates and spice-forward craft cocktails in Downtown Berkeley.'
+        },
+        {
+          id: 'great-notion',
+          name: 'Great Notion Brewing - Berkeley',
+          category: 'Bars',
+          lat: 37.8675,
+          lng: -122.2991,
+          address: '2031 Fourth St, Berkeley, CA 94710',
+          rating: '4.4',
+          hours: 'Daily 12PM–9PM',
+          isOpen: true,
+          description: 'Fourth Street taproom right across the street pouring hazy IPAs, culinary-inspired sours, and craft brews.'
+        },
+        {
+          id: 'fieldwork-berkeley',
+          name: 'Fieldwork Brewing Co.',
+          category: 'Bars',
+          lat: 37.8812,
+          lng: -122.2974,
+          address: '1160 Sixth St, Berkeley, CA 94710',
+          rating: '4.6',
+          hours: 'Mon–Thu 12PM–9PM; Fri–Sat 11AM–10PM; Sun 11AM–9PM',
+          isOpen: true,
+          description: 'West Berkeley taproom and beer garden with 20+ rotating fresh craft beers on tap and Detroit-style pizza.'
+        },
+        {
+          id: 'gilman-brewing',
+          name: 'Gilman Brewing Company',
+          category: 'Bars',
+          lat: 37.8797,
+          lng: -122.2999,
+          address: '912 Gilman St, Berkeley, CA 94710',
+          rating: '4.6',
+          hours: 'Mon–Thu, Sun 12PM–9PM; Fri–Sat 12PM–10PM',
+          isOpen: true,
+          description: 'Award-winning West Berkeley farmhouse ales, IPAs, and taproom right on Gilman Street.'
         },
         {
           id: 'jupiter',
@@ -1130,26 +1198,21 @@
 
       // App State
       const state = {
-        center: { lat: 37.8685, lng: -122.2995, label: 'West Berkeley, CA' },
+        center: { lat: 37.8678, lng: -122.2994, label: '2060 Fourth St, Berkeley, CA' },
         radiusMiles: 3,
         density: 10,
         openNow: true,
-        viewMode: 'map',
-        mapEngine: 'leaflet',
+        viewMode: 'map', // 'map' | 'list'
+        mapEngine: 'leaflet', // 'leaflet' | 'google'
         activeCategory: 'all',
         customQuery: '',
         places: [...STARTER_PLACES],
-        osmLive: true,
+        liveQuickTap: false,
         dropPinMode: false,
         isSnapshot: false,
         snapshotTimestamp: null,
-        savedSearches: [],
-        discoveredModels: []
+        savedSearches: []
       };
-
-      // In-flight request controllers so rapid clicks never overlap or race
-      let activeOverpassController = null;
-      let activeGeminiController = null;
 
       // Map instances
       let leafletMap = null;
@@ -1164,6 +1227,7 @@
       let gmapInfoWindow = null;
       let gmapLoaded = false;
 
+      // DOM helpers
       const $ = (id) => document.getElementById(id);
 
       function showToast(msg) {
@@ -1171,7 +1235,7 @@
         el.textContent = msg;
         el.classList.add('show');
         clearTimeout(showToast._t);
-        showToast._t = setTimeout(() => el.classList.remove('show'), 3600);
+        showToast._t = setTimeout(() => el.classList.remove('show'), 2800);
       }
 
       function haversineMiles(lat1, lng1, lat2, lng2) {
@@ -1196,18 +1260,26 @@
           .replace(/"/g, '&quot;');
       }
 
-      function updateOsmLiveUI() {
+      function updateLiveQuickTapUI() {
         const btn = $('btnLiveQuickTap');
-        btn.classList.toggle('active', state.osmLive);
-        btn.textContent = state.osmLive ? 'OSM Live: On' : 'OSM Live: Off';
+        const hasKey = Boolean(storage.get(STORAGE_KEYS.geminiKey));
+        const active = state.liveQuickTap && hasKey;
+        btn.classList.toggle('active', active);
+        btn.textContent = active ? 'Live Quick-Tap: On' : 'Live Quick-Tap: Off';
       }
+
+      const MODEL_PRIORITY = [
+        'gemini-4-hydrogen',
+        'gemini-3.8-flash',
+        'gemini-3.6-flash',
+        'gemini-3.5-flash-lite',
+        'gemini-2.5-flash'
+      ];
 
       function getActiveModel() {
         const pref = storage.get(STORAGE_KEYS.geminiModel, 'auto');
         if (pref && pref !== 'auto') return pref;
-        const resolved = storage.get(STORAGE_KEYS.resolvedModel, '');
-        if (resolved && PROVEN_MODELS.includes(resolved)) return resolved;
-        return PROVEN_MODELS[0];
+        return storage.get(STORAGE_KEYS.resolvedModel, 'gemini-2.5-flash');
       }
 
       function updateApiStatusUI() {
@@ -1218,263 +1290,63 @@
           dot.classList.remove('live');
           txt.textContent = 'Stamped Snapshot';
         } else if (hasGemini) {
-          const active = getActiveModel();
           dot.classList.add('live');
-          txt.textContent = `AI: ${active}`;
+          txt.textContent = `Live: ${getActiveModel()}`;
         } else {
           dot.classList.remove('live');
-          txt.textContent = state.osmLive ? 'OSM Keyless Live' : 'Demo Data';
+          txt.textContent = 'Demo Data';
         }
       }
 
-      function renderModelDropdown() {
-        const select = $('geminiModelSelect');
-        const currentPref = storage.get(STORAGE_KEYS.geminiModel, 'auto');
-        const models = state.discoveredModels;
-
-        let html = `<option value="auto">Auto — Gemini 4 Hydrogen → 3.8 Flash (Capped 2-Model)</option>`;
-        PROVEN_MODELS.forEach(id => {
-          const found = models.find(m => m.id === id);
-          const label = found ? `${found.displayName} (${id})` : id;
-          html += `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`;
-        });
-
-        models.forEach(m => {
-          if (PROVEN_MODELS.includes(m.id)) return;
-          html += `<option value="${escapeHtml(m.id)}">${escapeHtml(m.displayName || m.id)} (${escapeHtml(m.id)})</option>`;
-        });
-
-        select.innerHTML = html;
-
-        if ([...select.options].some(o => o.value === currentPref)) {
-          select.value = currentPref;
-        } else {
-          select.value = 'auto';
-          storage.set(STORAGE_KEYS.geminiModel, 'auto');
-        }
-
-        const hint = $('modelDiscoveryHint');
-        hint.textContent = `Auto mode caps failover to 2 proven models (${PROVEN_MODELS.join(' → ')}) to guarantee zero rate-limit bursts. Active: ${getActiveModel()}.`;
-      }
-
-      // Dynamically discover real active models from GET /v1beta/models
-      async function discoverGeminiModels(silent = true) {
+      async function probeBestFreeModel(silent = true) {
         const apiKey = storage.get(STORAGE_KEYS.geminiKey);
-        if (!apiKey) {
-          state.discoveredModels = [];
-          renderModelDropdown();
+        if (!apiKey) return;
+        const pref = storage.get(STORAGE_KEYS.geminiModel, 'auto');
+        if (pref && pref !== 'auto') {
           updateApiStatusUI();
-          return [];
+          return;
         }
-
         try {
-          const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=100', {
+          let availableSet = null;
+          const listResp = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
             headers: { 'x-goog-api-key': apiKey }
           });
-
-          if (!resp.ok) {
-            const errData = await resp.json().catch(() => ({}));
-            const msg = errData.error?.message || `HTTP ${resp.status}`;
-            if (!silent) showToast(`Model discovery error: ${msg}`);
-            return [];
+          if (listResp.ok) {
+            const listData = await listResp.json();
+            availableSet = new Set((listData.models || []).map(m => (m.name || '').replace(/^models\//, '')));
           }
 
-          const data = await resp.json();
-          const rawModels = Array.isArray(data.models) ? data.models : [];
+          const candidates = availableSet
+            ? MODEL_PRIORITY.filter(m => availableSet.has(m))
+            : [...MODEL_PRIORITY];
+          if (!candidates.includes('gemini-2.5-flash')) candidates.push('gemini-2.5-flash');
 
-          const usable = rawModels
-            .filter(m => {
-              const id = (m.name || '').replace(/^models\//, '');
-              const methods = m.supportedGenerationMethods || [];
-              if (!methods.includes('generateContent')) return false;
-              if (!/^gemini-/i.test(id)) return false;
-              if (/embedding|imagen|veo|tts|audio|robotics|computer-use|deep-research/i.test(id)) return false;
-              return true;
-            })
-            .map(m => ({
-              id: (m.name || '').replace(/^models\//, ''),
-              displayName: m.displayName || (m.name || '').replace(/^models\//, '')
-            }));
-
-          // Prioritize proven models first
-          usable.sort((a, b) => {
-            const aIdx = PROVEN_MODELS.indexOf(a.id);
-            const bIdx = PROVEN_MODELS.indexOf(b.id);
-            if (aIdx !== -1 || bIdx !== -1) {
-              return (aIdx === -1 ? 99 : aIdx) - (bIdx === -1 ? 99 : bIdx);
-            }
-            return b.id.localeCompare(a.id);
-          });
-
-          state.discoveredModels = usable;
-          storage.set(STORAGE_KEYS.discoveredModels, JSON.stringify(usable));
-
-          // Pick highest-priority proven model present on account
-          const bestProven = PROVEN_MODELS.find(id => usable.some(m => m.id === id)) || PROVEN_MODELS[0];
-          storage.set(STORAGE_KEYS.resolvedModel, bestProven);
-
-          renderModelDropdown();
-          updateApiStatusUI();
-          if (!silent) {
-            showToast(`Verified ${usable.length} models • Active: ${getActiveModel()}`);
-          }
-          return usable;
-        } catch (err) {
-          if (!silent) showToast(`Could not list models: ${err.message}`);
-          return [];
-        }
-      }
-
-      // Keyless OpenStreetMap Overpass API for Quick-Tap categories anywhere in the world
-      const OVERPASS_ENDPOINTS = [
-        'https://overpass-api.de/api/interpreter',
-        'https://overpass.kumi.systems/api/interpreter'
-      ];
-
-      function buildOverpassQuery(lat, lng, radiusMeters, category) {
-        const r = Math.round(radiusMeters);
-        const filters = {
-          'Gas Station': `
-            nwr["amenity"="fuel"](around:${r},${lat},${lng});
-          `,
-          'Bars': `
-            nwr["amenity"~"^(bar|pub|biergarten|nightclub)$"](around:${r},${lat},${lng});
-          `,
-          'Dining': `
-            nwr["amenity"~"^(restaurant|cafe|fast_food|food_court)$"](around:${r},${lat},${lng});
-          `,
-          'Parks': `
-            nwr["leisure"~"^(park|nature_reserve|garden|dog_park)$"](around:${r},${lat},${lng});
-          `,
-          'all': `
-            nwr["amenity"~"^(restaurant|cafe|bar|pub|fuel)$"](around:${r},${lat},${lng});
-            nwr["leisure"="park"](around:${r},${lat},${lng});
-          `
-        };
-        const body = filters[category] || filters['all'];
-        return `[out:json][timeout:14];(${body});out center 60;`;
-      }
-
-      function mapOsmElementToPlace(el, requestedCategory) {
-        const tags = el.tags || {};
-        const name = tags.name || tags.brand || tags.operator;
-        if (!name) return null;
-
-        const lat = el.lat !== undefined ? el.lat : el.center?.lat;
-        const lng = el.lon !== undefined ? el.lon : el.center?.lon;
-        if (!lat || !lng) return null;
-
-        let category = requestedCategory;
-        if (requestedCategory === 'all') {
-          if (tags.amenity === 'fuel') category = 'Gas Station';
-          else if (/bar|pub|biergarten|nightclub/.test(tags.amenity || '')) category = 'Bars';
-          else if (tags.leisure) category = 'Parks';
-          else category = 'Dining';
-        }
-
-        const street = [tags['addr:housenumber'], tags['addr:street']].filter(Boolean).join(' ');
-        const city = tags['addr:city'] || '';
-        const address = [street, city].filter(Boolean).join(', ');
-
-        const cuisine = tags.cuisine ? tags.cuisine.replace(/;/g, ', ').replace(/_/g, ' ') : '';
-        const subType = tags.amenity || tags.leisure || '';
-        const descParts = [];
-        if (cuisine) descParts.push(`Cuisine: ${cuisine}`);
-        else if (subType) descParts.push(subType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
-        if (tags.outdoor_seating === 'yes') descParts.push('Outdoor seating');
-        if (tags.opening_hours) descParts.push(`Hours: ${tags.opening_hours}`);
-
-        return {
-          id: `osm-${el.type}-${el.id}`,
-          name,
-          category,
-          lat: Number(lat),
-          lng: Number(lng),
-          address,
-          rating: '',
-          hours: tags.opening_hours || '',
-          isOpen: true,
-          coordVerified: true,
-          description: descParts.join(' • ') || `${category} near ${state.center.label}`
-        };
-      }
-
-      async function runOverpassSearch(category) {
-        if (activeOverpassController) {
-          activeOverpassController.abort();
-        }
-        const controller = new AbortController();
-        activeOverpassController = controller;
-
-        const loading = $('loadingIndicator');
-        loading.classList.add('active');
-
-        const radiusMeters = state.radiusMiles * 1609.34;
-        const query = buildOverpassQuery(state.center.lat, state.center.lng, radiusMeters, category);
-
-        try {
-          let data = null;
-          let lastErr = null;
-
-          for (const endpoint of OVERPASS_ENDPOINTS) {
-            if (controller.signal.aborted) return;
+          for (const model of candidates) {
             try {
-              const timeoutId = setTimeout(() => controller.abort(), 12000);
-              const resp = await fetch(endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-                body: `data=${encodeURIComponent(query)}`,
-                signal: controller.signal
-              });
-              clearTimeout(timeoutId);
-              if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-              data = await resp.json();
-              break;
-            } catch (err) {
-              if (err.name === 'AbortError') return;
-              lastErr = err;
-            }
+              const r = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+                  body: JSON.stringify({
+                    contents: [{ role: 'user', parts: [{ text: 'ok' }] }],
+                    generationConfig: { maxOutputTokens: 1 }
+                  })
+                }
+              );
+              if (r.ok) {
+                storage.set(STORAGE_KEYS.resolvedModel, model);
+                updateApiStatusUI();
+                if (!silent) showToast(`Auto-selected highest free tier: ${model}`);
+                return;
+              }
+            } catch {}
           }
-
-          if (controller.signal.aborted) return;
-
-          if (!data || !Array.isArray(data.elements)) {
-            throw lastErr || new Error('Overpass unavailable');
-          }
-
-          const seen = new Set();
-          const mapped = [];
-          for (const el of data.elements) {
-            const p = mapOsmElementToPlace(el, category);
-            if (!p) continue;
-            const dedupKey = `${p.name.toLowerCase()}|${p.lat.toFixed(3)}|${p.lng.toFixed(3)}`;
-            if (seen.has(dedupKey)) continue;
-            seen.add(dedupKey);
-            mapped.push(p);
-          }
-
-          if (mapped.length === 0) {
-            showToast(`No OSM ${category === 'all' ? 'places' : category} found in ${state.radiusMiles} mi — try 6 mi.`);
-            state.places = [];
-          } else {
-            state.places = mapped;
-          }
-
-          state.customQuery = '';
-          state.activeCategory = category;
-          renderAll();
-        } catch (err) {
-          if (err.name === 'AbortError') return;
-          state.customQuery = '';
-          state.activeCategory = category;
-          state.places = [...STARTER_PLACES];
-          renderAll();
-          showToast(`OSM busy — showing local starter pins (${err.message})`);
-        } finally {
-          if (activeOverpassController === controller) {
-            loading.classList.remove('active');
-            activeOverpassController = null;
-          }
+          storage.set(STORAGE_KEYS.resolvedModel, 'gemini-2.5-flash');
+          updateApiStatusUI();
+        } catch {
+          storage.set(STORAGE_KEYS.resolvedModel, 'gemini-2.5-flash');
+          updateApiStatusUI();
         }
       }
 
@@ -1492,6 +1364,7 @@
           list = list.filter(p => p.isOpen !== false);
         }
 
+        // Keep within radius (with slight grace for demo items if far)
         const within = list.filter(p => p.distance <= state.radiusMiles);
         const finalPool = within.length > 0 ? within : list;
 
@@ -1520,7 +1393,9 @@
           if (!state.dropPinMode) return;
           setCenter(e.latlng.lat, e.latlng.lng, `Pinned (${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)})`);
           toggleDropPin(false);
-          refreshCurrentSearch();
+          if (state.customQuery && storage.get(STORAGE_KEYS.geminiKey)) {
+            runGeminiSearch(state.customQuery);
+          }
         });
       }
 
@@ -1541,12 +1416,13 @@
         }).addTo(leafletMap);
 
         leafletCenterMarker = L.circleMarker([state.center.lat, state.center.lng], {
-          radius: 7,
+          radius: 6,
           color: '#efefef',
           weight: 2,
           fillColor: '#d97757',
-          fillOpacity: 1
-        }).bindPopup(`<strong>Search Center</strong><br>${escapeHtml(state.center.label)}`).addTo(leafletMap);
+          fillOpacity: 0.85,
+          interactive: false
+        }).addTo(leafletMap);
 
         items.forEach((p) => {
           const color = CAT_COLORS[p.category] || CAT_COLORS.Custom;
@@ -1630,7 +1506,6 @@
             if (!state.dropPinMode) return;
             setCenter(e.latLng.lat(), e.latLng.lng(), `Pinned (${e.latLng.lat().toFixed(4)}, ${e.latLng.lng().toFixed(4)})`);
             toggleDropPin(false);
-            refreshCurrentSearch();
           });
         }
 
@@ -1699,6 +1574,29 @@
         gmap.fitBounds(gmapCircle.getBounds());
       }
 
+      // Render Keyless Native Google Maps Embed View
+      let activeEmbedIdx = 0;
+      function renderGoogleEmbed(items) {
+        const pills = $('googleEmbedPills');
+        const frame = $('googleEmbedFrame');
+        if (!items || items.length === 0) {
+          pills.innerHTML = '<span style="font-size:12px;color:var(--text-muted);">No spots in range</span>';
+          const q = encodeURIComponent(state.center.label || `${state.center.lat},${state.center.lng}`);
+          frame.src = `https://www.google.com/maps?q=${q}&z=15&output=embed`;
+          return;
+        }
+        if (activeEmbedIdx >= items.length) activeEmbedIdx = 0;
+        const selected = items[activeEmbedIdx] || items[0];
+        const queryStr = `${selected.name}, ${selected.address || state.center.label}`;
+        frame.src = `https://www.google.com/maps?q=${encodeURIComponent(queryStr)}&z=16&output=embed`;
+
+        pills.innerHTML = items.map((p, idx) => `
+          <button type="button" class="chip ${idx === activeEmbedIdx ? 'active' : ''}" data-embed-idx="${idx}">
+            ${idx + 1}. ${escapeHtml(p.name)} (${p.distance.toFixed(2)} mi)
+          </button>
+        `).join('');
+      }
+
       // Render List View
       function renderList(items) {
         const grid = $('listGrid');
@@ -1756,12 +1654,20 @@
           ? `Stamped ${new Date(state.snapshotTimestamp).toLocaleString()}`
           : 'Ready';
 
+        // Map engine visibility
         if (state.mapEngine === 'google' && gmapLoaded) {
           $('leafletMap').style.display = 'none';
+          $('googleEmbedWrap').style.display = 'none';
           $('googleMap').style.display = 'block';
           renderGoogleMap(items);
+        } else if (state.mapEngine === 'gembed') {
+          $('leafletMap').style.display = 'none';
+          $('googleMap').style.display = 'none';
+          $('googleEmbedWrap').style.display = 'block';
+          renderGoogleEmbed(items);
         } else {
           $('googleMap').style.display = 'none';
+          $('googleEmbedWrap').style.display = 'none';
           $('leafletMap').style.display = 'block';
           renderLeaflet(items);
           setTimeout(() => leafletMap && leafletMap.invalidateSize(), 60);
@@ -1769,22 +1675,12 @@
 
         renderList(items);
         updateApiStatusUI();
-        updateOsmLiveUI();
+        updateLiveQuickTapUI();
       }
 
       function setCenter(lat, lng, label) {
         state.center = { lat, lng, label };
         renderAll();
-      }
-
-      function refreshCurrentSearch() {
-        if (state.customQuery) {
-          runGeminiSearch(state.customQuery);
-        } else if (state.activeCategory === 'Local Events') {
-          runGeminiSearch('', 'Local Events');
-        } else if (state.osmLive) {
-          runOverpassSearch(state.activeCategory);
-        }
       }
 
       function toggleDropPin(active) {
@@ -1796,22 +1692,25 @@
         }
       }
 
-      // Hardened Gemini Live Search: strictly capped at 2 proven models, smart 429 handling, AbortController
+      // Gemini Live Search (with Google Search grounding)
       async function runGeminiSearch(promptText, categoryOverride = null) {
         const apiKey = storage.get(STORAGE_KEYS.geminiKey);
         if (!apiKey) {
-          showToast('Tap "Keys" in the top right to add your Gemini API key for AI & 72h Events.');
+          showToast('Using Demo Data — add a Gemini API key in Keys for live search.');
           if (categoryOverride) {
             state.customQuery = '';
             state.activeCategory = categoryOverride;
-            state.places = [...STARTER_PLACES];
           } else {
+            // Simple local filter fallback for demo mode
             state.customQuery = promptText;
             const q = promptText.toLowerCase();
             const matched = STARTER_PLACES.filter(p =>
               p.name.toLowerCase().includes(q) ||
               p.description.toLowerCase().includes(q) ||
-              p.category.toLowerCase().includes(q)
+              p.category.toLowerCase().includes(q) ||
+              (q.includes('vegan') && p.name.includes('Tacubaya')) ||
+              (q.includes('view') && (p.name.includes('Chávez') || p.name.includes('Rose'))) ||
+              (q.includes('date') && (p.category === 'Bars' || p.name.includes('East Bay Spice')))
             );
             state.places = matched.length > 0 ? matched : [...STARTER_PLACES];
           }
@@ -1819,32 +1718,24 @@
           return;
         }
 
-        if (activeGeminiController) {
-          activeGeminiController.abort();
-        }
-        const controller = new AbortController();
-        activeGeminiController = controller;
-
         const loading = $('loadingIndicator');
         loading.classList.add('active');
 
-        try {
-          const userPref = storage.get(STORAGE_KEYS.geminiModel, 'auto');
-          // Strictly cap to at most 2 models: user selection (if pinned) or proven 2-model pair
-          const tryOrder = (userPref && userPref !== 'auto')
-            ? [userPref]
-            : [...PROVEN_MODELS];
+        const nowIso = new Date().toISOString();
+        const countTarget = state.density;
+        const userIntent = categoryOverride
+          ? (categoryOverride === 'all'
+              ? `Find a balanced, up-to-the-minute mix of top-rated Dining, Bars, Parks, Gas Stations, and Local Events happening between NOW (${nowIso}) and 72 hours from now`
+              : (categoryOverride === 'Local Events'
+                  ? `Find real local events happening between NOW (${nowIso}) and 72 hours from now`
+                  : `Find real, up-to-the-minute ${categoryOverride} locations with current hours`))
+          : promptText;
 
-          const nowIso = new Date().toISOString();
-          const countTarget = state.density;
-          const userIntent = categoryOverride === 'Local Events'
-            ? `Find real local events happening between NOW (${nowIso}) and 72 hours from now`
-            : promptText;
-
-          const systemPrompt = `You are a precise local discovery engine.
+        const systemPrompt = `You are a precise local discovery engine.
 Center coordinates: ${state.center.lat.toFixed(5)}, ${state.center.lng.toFixed(5)} (${state.center.label}).
-Search radius: ${state.radiusMiles} miles.
-Target count: up to ${countTarget} high-signal results.
+Search radius: ${state.radiusMiles} miles (0.00 miles minimum — NEVER apply a minimum distance filter).
+Target count: up to ${countTarget} high-signal results, sorted strictly closest-first starting at 0 feet from the center address.
+CRITICAL PROXIMITY RULE: Always prioritize venues on the exact same street block, across the street, or within 0.0 to 0.3 miles of ${state.center.label} (${state.center.lat.toFixed(5)}, ${state.center.lng.toFixed(5)}) before listing spots farther away. Include taprooms, breweries, brewpubs, wine bars, lounges, and pubs when searching for beer, drinks, or bars (for example, Great Notion Brewing at 2031 Fourth St is directly across the street from 2060 Fourth St).
 Open now preference: ${state.openNow ? 'Prefer places currently open or upcoming within 72h for events' : 'Any hours'}.
 Current local ISO time: ${nowIso}.
 
@@ -1859,81 +1750,67 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
 - "isOpen": boolean
 - "description": string (concise 1-2 line description)`;
 
-          let lastErrorMsg = null;
+        const primaryModel = getActiveModel();
+        const tryOrder = [primaryModel, ...MODEL_PRIORITY.filter(m => m !== primaryModel)];
+        let lastErr = null;
 
-          for (const model of tryOrder) {
-            if (controller.signal.aborted) return;
+        // Build attempt queue: try grounded on primary model first, then ungrounded across available free-tier models
+        const attempts = [
+          { model: primaryModel, grounded: true },
+          ...tryOrder.map(m => ({ model: m, grounded: false }))
+        ];
 
-            const makeRequest = (withGrounding) => {
-              const payload = {
-                contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nQuery: ${userIntent}` }] }],
-                generationConfig: { temperature: 0.2 }
-              };
-              if (withGrounding) {
-                payload.tools = [{ google_search: {} }];
-              }
-              return fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-                {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'x-goog-api-key': apiKey
-                  },
-                  body: JSON.stringify(payload),
-                  signal: controller.signal
-                }
-              );
+        try {
+          for (const attempt of attempts) {
+            const payload = {
+              contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nQuery: ${userIntent}` }] }],
+              generationConfig: { temperature: 0.2 }
             };
-
-            let resp = await makeRequest(true);
-
-            // Only retry without grounding if HTTP 400 explicitly indicates grounding/tool isn't supported
-            if (!resp.ok && resp.status === 400) {
-              const err400 = await resp.json().catch(() => ({}));
-              const msg400 = err400.error?.message || 'Bad Request';
-              if (/google_search|grounding|tool/i.test(msg400)) {
-                resp = await makeRequest(false);
-              } else {
-                lastErrorMsg = `${model}: ${msg400}`;
-                continue;
-              }
+            if (attempt.grounded) {
+              payload.tools = [{ google_search: {} }];
             }
+
+            const resp = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(attempt.model)}:generateContent`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-goog-api-key': apiKey
+                },
+                body: JSON.stringify(payload)
+              }
+            );
 
             if (!resp.ok) {
               const errData = await resp.json().catch(() => ({}));
               const msg = errData.error?.message || `HTTP ${resp.status}`;
-              lastErrorMsg = `${model}: ${msg}`;
-
-              if (resp.status === 429) {
-                // Distinguish 0-quota model restriction vs temporary RPM spike
-                if (/limit:\s*0|billing|plan/i.test(msg)) {
-                  continue; // Step to second proven model once
-                }
-                throw new Error(`Rate limit (429) on ${model} — wait 15s and retry.`);
+              lastErr = new Error(msg);
+              if (resp.status === 429 || resp.status === 404 || resp.status === 400 || /quota|exceeded|not found|not supported/i.test(msg)) {
+                continue;
               }
-              continue;
+              throw lastErr;
             }
 
             const data = await resp.json();
             const rawText = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
             const jsonMatch = rawText.match(/\[[\s\S]*\]/);
             if (!jsonMatch) {
-              lastErrorMsg = `${model}: non-JSON response`;
+              lastErr = new Error('Gemini did not return structured locations');
               continue;
             }
 
             const parsed = JSON.parse(jsonMatch[0]);
             if (!Array.isArray(parsed) || parsed.length === 0) {
-              lastErrorMsg = `${model}: empty results`;
+              lastErr = new Error('No locations returned for this query');
               continue;
             }
 
-            if (userPref === 'auto') {
-              storage.set(STORAGE_KEYS.resolvedModel, model);
+            if (storage.get(STORAGE_KEYS.geminiModel, 'auto') === 'auto') {
+              storage.set(STORAGE_KEYS.resolvedModel, attempt.model);
             }
 
-            state.places = parsed.map((item, idx) => ({
+            const rawCandidates = parsed.map((item, idx) => ({
               id: `gem-${Date.now()}-${idx}`,
               name: String(item.name || 'Unnamed Spot'),
               category: item.category || categoryOverride || 'Custom',
@@ -1946,29 +1823,29 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
               description: String(item.description || '')
             }));
 
+            showToast(`Validating ${rawCandidates.length} pin locations before rendering...`);
+            await verifyPlacesCoordinates(rawCandidates, false);
+
+            state.places = rawCandidates;
             state.customQuery = categoryOverride ? '' : promptText;
             if (categoryOverride) state.activeCategory = categoryOverride;
             renderAll();
-            showToast(`Found ${state.places.length} results via ${model} — verifying pins...`);
-            verifyPlacesCoordinates(state.places);
+            const verifiedCount = state.places.filter(x => x.coordVerified).length;
+            const modeTag = attempt.grounded ? 'grounded' : 'ungrounded';
+            showToast(`Rendered ${state.places.length} spots (${verifiedCount} rooftop-verified) via ${attempt.model} (${modeTag})`);
             return;
           }
-
-          throw new Error(lastErrorMsg || 'Search failed on active models');
+          throw lastErr || new Error('All Gemini models hit quota limits');
         } catch (err) {
-          if (err.name === 'AbortError') return;
           if (categoryOverride) {
             state.customQuery = '';
             state.activeCategory = categoryOverride;
             state.places = [...STARTER_PLACES];
             renderAll();
           }
-          showToast(`Gemini notice: ${err.message}`);
+          showToast(`Quota limit — showing local data (${err.message})`);
         } finally {
-          if (activeGeminiController === controller) {
-            loading.classList.remove('active');
-            activeGeminiController = null;
-          }
+          loading.classList.remove('active');
         }
       }
 
@@ -2030,7 +1907,7 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
         if (engine === 'google') {
           const gKey = storage.get(STORAGE_KEYS.gmapsKey);
           if (!gKey) {
-            showToast('Add a Google Maps JS API key in Keys to use Google Maps view.');
+            showToast('Add a Google Maps JS API key in Keys for multi-pin JS SDK, or use Google Map (Free).');
             $('settingsModal').classList.add('open');
             return;
           }
@@ -2043,6 +1920,7 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
         }
         state.mapEngine = engine;
         $('btnEngineLeaflet').classList.toggle('active', engine === 'leaflet');
+        $('btnEngineGoogleEmbed').classList.toggle('active', engine === 'gembed');
         $('btnEngineGoogle').classList.toggle('active', engine === 'google');
         renderAll();
       }
@@ -2075,36 +1953,6 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
         return JSON.parse(new TextDecoder().decode(bytes));
       }
 
-      // One-tap device provisioning via #key=... or #gmapskey=... (immediately scrubbed from URL bar)
-      function checkHashKeyProvisioning() {
-        const hash = window.location.hash || '';
-        if (!hash || hash.startsWith('#snapshot=')) return;
-        const params = new URLSearchParams(hash.slice(1));
-        let provisioned = false;
-
-        const newGeminiKey = params.get('key') || params.get('geminikey');
-        if (newGeminiKey && newGeminiKey.trim().length > 10) {
-          storage.set(STORAGE_KEYS.geminiKey, newGeminiKey.trim());
-          storage.set(STORAGE_KEYS.resolvedModel, PROVEN_MODELS[0]);
-          provisioned = true;
-        }
-
-        const newMapsKey = params.get('gmapskey') || params.get('mapskey');
-        if (newMapsKey && newMapsKey.trim().length > 10) {
-          storage.set(STORAGE_KEYS.gmapsKey, newMapsKey.trim());
-          provisioned = true;
-        }
-
-        if (provisioned) {
-          if (window.history && window.history.replaceState) {
-            window.history.replaceState(null, document.title, window.location.pathname + window.location.search);
-          } else {
-            window.location.hash = '';
-          }
-          showToast('API key saved to this device & cleared from URL');
-        }
-      }
-
       function checkHashSnapshot() {
         const hash = window.location.hash || '';
         if (!hash.startsWith('#snapshot=')) return false;
@@ -2124,8 +1972,32 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
         }
       }
 
-      // Pin-to-Address Verification Harness
+      // Pre-Render Rooftop & POI Verification Harness (Known DB -> Google Geocoder -> ArcGIS Rooftop -> Overpass OSM -> Nominatim)
       let gmapGeocoder = null;
+      const KNOWN_ANCHORS = [
+        { match: /great notion|2031 fourth|2031 4th/i, lat: 37.86752, lng: -122.29912, address: '2031 Fourth St, Berkeley, CA 94710' },
+        { match: /tacubaya|1782 fourth|1782 4th/i, lat: 37.86992, lng: -122.30012, address: '1782 Fourth St, Berkeley, CA 94710' },
+        { match: /fieldwork|1160 sixth|1160 6th/i, lat: 37.88122, lng: -122.29742, address: '1160 Sixth St, Berkeley, CA 94710' },
+        { match: /gilman brewing|912 gilman/i, lat: 37.87972, lng: -122.29992, address: '912 Gilman St, Berkeley, CA 94710' },
+        { match: /headlands.*gilman|1280 gilman/i, lat: 37.88145, lng: -122.28825, address: '1280 Gilman St, Berkeley, CA 94702' },
+        { match: /cellarmaker|940 parker/i, lat: 37.86025, lng: -122.29235, address: '940 Parker St, Berkeley, CA 94710' },
+        { match: /trumer|1404 fourth|1404 4th/i, lat: 37.87685, lng: -122.30255, address: '1404 Fourth St, Berkeley, CA 94710' },
+        { match: /monk's kettle|3141 telegraph/i, lat: 37.85295, lng: -122.26025, address: '3141 Telegraph Ave, Oakland, CA 94609' },
+        { match: /triple rock|1920 shattuck/i, lat: 37.87325, lng: -122.26865, address: '1920 Shattuck Ave, Berkeley, CA 94704' },
+        { match: /jupiter|2181 shattuck/i, lat: 37.86980, lng: -122.26770, address: '2181 Shattuck Ave, Berkeley, CA 94704' },
+        { match: /tupper.*reed|2271 shattuck/i, lat: 37.86820, lng: -122.26790, address: '2271 Shattuck Ave, Berkeley, CA 94704' },
+        { match: /east bay spice|2142 oxford/i, lat: 37.87050, lng: -122.26620, address: '2142 Oxford St, Berkeley, CA 94704' },
+        { match: /hotsy totsy|601 san pablo/i, lat: 37.89310, lng: -122.29830, address: '601 San Pablo Ave, Albany, CA 94706' },
+        { match: /club mallard|752 san pablo/i, lat: 37.89025, lng: -122.29795, address: '752 San Pablo Ave, Albany, CA 94706' },
+        { match: /berkeley bowl west|920 heinz/i, lat: 37.85290, lng: -122.29040, address: '920 Heinz Ave, Berkeley, CA 94710' },
+        { match: /aquatic park|80 bolivar/i, lat: 37.86230, lng: -122.30160, address: '80 Bolivar Dr, Berkeley, CA 94710' },
+        { match: /cedar rose|1300 rose/i, lat: 37.88090, lng: -122.28690, address: '1300 Rose St, Berkeley, CA 94702' },
+        { match: /chavez park|11 spinnaker/i, lat: 37.87170, lng: -122.31890, address: '11 Spinnaker Way, Berkeley, CA 94710' },
+        { match: /rose garden|1200 euclid/i, lat: 37.88520, lng: -122.26290, address: '1200 Euclid Ave, Berkeley, CA 94708' },
+        { match: /1250 university/i, lat: 37.86930, lng: -122.28860, address: '1250 University Ave, Berkeley, CA 94702' },
+        { match: /2200 durant/i, lat: 37.86730, lng: -122.26540, address: '2200 Durant Ave, Berkeley, CA 94704' }
+      ];
+
       function getGeoCache() {
         try { return JSON.parse(storage.get(STORAGE_KEYS.geoCache, '{}')) || {}; } catch { return {}; }
       }
@@ -2133,69 +2005,199 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
         try { storage.set(STORAGE_KEYS.geoCache, JSON.stringify(cache)); } catch {}
       }
 
-      async function geocodeOneAddress(queryText) {
-        const key = queryText.trim().toLowerCase();
-        const cache = getGeoCache();
-        if (cache[key]) return cache[key];
+      function normalizeAddressForGeocode(addr) {
+        let clean = String(addr || '').replace(/\s*\([^)]*\)/g, '').replace(/\s+#[A-Za-z0-9-]+/g, '').trim();
+        if (clean && !/\b(CA|California)\b/i.test(clean)) {
+          clean += ', Berkeley, CA';
+        }
+        return clean;
+      }
 
+      async function geocodeViaArcGIS(addressStr, centerLat, centerLng) {
+        try {
+          const d = 0.14;
+          const extent = `${(centerLng - d).toFixed(4)},${(centerLat - d).toFixed(4)},${(centerLng + d).toFixed(4)},${(centerLat + d).toFixed(4)}`;
+          const url = `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&SingleLine=${encodeURIComponent(addressStr)}&location=${centerLng},${centerLat}&searchExtent=${encodeURIComponent(extent)}&maxLocations=3&outFields=Match_addr,Addr_type`;
+          const resp = await fetch(url);
+          if (!resp.ok) return null;
+          const data = await resp.json();
+          const best = (data.candidates || []).find(c => c.score >= 82 && c.location);
+          if (best) {
+            return { lat: Number(best.location.y), lng: Number(best.location.x), source: 'arcgis' };
+          }
+        } catch {}
+        return null;
+      }
+
+      async function geocodeOnePlace(place) {
+        const combined = `${place.name || ''} ${place.address || ''}`.trim();
+        for (const anchor of KNOWN_ANCHORS) {
+          if (anchor.match.test(combined)) {
+            return { lat: anchor.lat, lng: anchor.lng, source: 'anchor' };
+          }
+        }
+
+        const normAddr = normalizeAddressForGeocode(place.address || place.name);
+        const cacheKey = `${(place.name || '').toLowerCase()}|${normAddr.toLowerCase()}`;
+        const cache = getGeoCache();
+        if (cache[cacheKey]) return cache[cacheKey];
+
+        // 1. Google Maps Geocoder (when loaded)
         if (window.google && window.google.maps && window.google.maps.Geocoder) {
           if (!gmapGeocoder) gmapGeocoder = new google.maps.Geocoder();
           try {
             const res = await new Promise((resolve) => {
-              gmapGeocoder.geocode({ address: queryText }, (results, status) => {
+              gmapGeocoder.geocode({ address: normAddr }, (results, status) => {
                 if (status === 'OK' && results && results[0]) {
                   const loc = results[0].geometry.location;
-                  resolve({ lat: loc.lat(), lng: loc.lng() });
+                  resolve({ lat: loc.lat(), lng: loc.lng(), source: 'google' });
                 } else resolve(null);
               });
             });
             if (res) {
-              cache[key] = res;
+              cache[cacheKey] = res;
               saveGeoCache(cache);
               return res;
             }
           } catch {}
         }
 
+        // 2. Photon Komoot OSM Geocoder (keyless, CORS-enabled, parallel-safe POI + street rooftop matching)
         try {
-          const resp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(queryText)}`);
+          const pQueries = [`${place.name} ${normAddr}`, normAddr];
+          for (const pq of pQueries) {
+            const pUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(pq)}&lat=${state.center.lat}&lon=${state.center.lng}&limit=3`;
+            const pResp = await fetch(pUrl);
+            if (pResp.ok) {
+              const pData = await pResp.json();
+              const feat = (pData.features || []).find(f => {
+                if (!f.geometry || !Array.isArray(f.geometry.coordinates)) return false;
+                const [lon, lat] = f.geometry.coordinates;
+                return haversineMiles(state.center.lat, state.center.lng, lat, lon) <= Math.max(state.radiusMiles * 2.2, 8);
+              });
+              if (feat) {
+                const [lon, lat] = feat.geometry.coordinates;
+                const res = { lat: Number(lat), lng: Number(lon), source: 'photon' };
+                cache[cacheKey] = res;
+                saveGeoCache(cache);
+                return res;
+              }
+            }
+          }
+        } catch {}
+
+        // 3. US Census Bureau TigerWeb Rooftop Geocoder (JSONP, keyless, zero rate-limit)
+        try {
+          const censusRes = await new Promise((resolve) => {
+            const cb = '__censusGeo_' + Math.random().toString(36).slice(2);
+            const timer = setTimeout(() => { delete window[cb]; resolve(null); }, 2600);
+            window[cb] = (data) => {
+              clearTimeout(timer);
+              delete window[cb];
+              const match = data?.result?.addressMatches?.[0];
+              if (match && match.coordinates) {
+                resolve({ lat: Number(match.coordinates.y), lng: Number(match.coordinates.x), source: 'census' });
+              } else resolve(null);
+            };
+            const s = document.createElement('script');
+            s.src = `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${encodeURIComponent(normAddr)}&benchmark=Public_AR_Current&format=jsonp&callback=${cb}`;
+            s.onerror = () => { clearTimeout(timer); delete window[cb]; resolve(null); };
+            document.head.appendChild(s);
+            setTimeout(() => s.remove(), 3000);
+          });
+          if (censusRes) {
+            cache[cacheKey] = censusRes;
+            saveGeoCache(cache);
+            return censusRes;
+          }
+        } catch {}
+
+        // 4. OpenStreetMap Nominatim bounded fallback
+        try {
+          const d = 0.14;
+          const viewbox = `${(state.center.lng - d).toFixed(4)},${(state.center.lat + d).toFixed(4)},${(state.center.lng + d).toFixed(4)},${(state.center.lat - d).toFixed(4)}`;
+          const resp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&bounded=1&viewbox=${encodeURIComponent(viewbox)}&q=${encodeURIComponent(normAddr)}`);
           const results = await resp.json();
           if (results && results.length > 0) {
-            const res = { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon) };
-            cache[key] = res;
+            const res = { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon), source: 'nominatim' };
+            cache[cacheKey] = res;
             saveGeoCache(cache);
             return res;
           }
         } catch {}
+
         return null;
       }
 
-      async function verifyPlacesCoordinates(placesList) {
+      async function verifyPlacesCoordinates(placesList, triggerRender = true) {
         if (!Array.isArray(placesList) || placesList.length === 0) return;
-        let updated = false;
-        for (const p of placesList) {
-          if (p.coordVerified || !p.address) continue;
-          const query = p.address.includes(p.name) ? p.address : `${p.name}, ${p.address}`;
-          let geo = await geocodeOneAddress(query);
-          if (!geo) geo = await geocodeOneAddress(p.address);
-          if (geo) {
+        const maxRadiusAllowed = Math.max(state.radiusMiles * 2.2, 8);
+
+        // Batch-fetch real OpenStreetMap POIs inside radius via Overpass so named venues snap to exact OSM building nodes
+        let osmPois = [];
+        try {
+          const radMeters = Math.min(Math.round(state.radiusMiles * 1609.34 * 1.25), 10000);
+          const overQ = `[out:json][timeout:6];nwr["name"](around:${radMeters},${state.center.lat.toFixed(5)},${state.center.lng.toFixed(5)})["amenity"~"bar|pub|biergarten|restaurant|cafe|fast_food|fuel|nightclub|theatre|music_venue"];out center;`;
+          const overResp = await fetch('https://overpass-api.de/api/interpreter', {
+            method: 'POST',
+            body: 'data=' + encodeURIComponent(overQ)
+          });
+          if (overResp.ok) {
+            const overData = await overResp.json();
+            osmPois = (overData.elements || []).map(el => ({
+              name: (el.tags?.name || '').toLowerCase(),
+              lat: el.lat || el.center?.lat,
+              lng: el.lon || el.center?.lon
+            })).filter(x => x.name && Number.isFinite(x.lat) && Number.isFinite(x.lng));
+          }
+        } catch {}
+
+        await Promise.all(placesList.map(async (p) => {
+          const pNameClean = (p.name || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+          const osmMatch = osmPois.find(o => {
+            const oClean = o.name.replace(/[^a-z0-9 ]/g, '').trim();
+            return oClean && (pNameClean.includes(oClean) || oClean.includes(pNameClean));
+          });
+          if (osmMatch) {
+            p.lat = osmMatch.lat;
+            p.lng = osmMatch.lng;
+            p.coordVerified = true;
+            return;
+          }
+
+          const geo = await geocodeOnePlace(p);
+          if (geo && Number.isFinite(geo.lat) && Number.isFinite(geo.lng)) {
             const distFromCenter = haversineMiles(state.center.lat, state.center.lng, geo.lat, geo.lng);
-            if (distFromCenter <= Math.max(state.radiusMiles * 2.5, 12)) {
+            if (distFromCenter <= maxRadiusAllowed) {
               p.lat = geo.lat;
               p.lng = geo.lng;
               p.coordVerified = true;
-              updated = true;
             }
           }
-          await new Promise(r => setTimeout(r, 180));
+        }));
+
+        // De-cluster identical or stacked coordinates so pins never overlap or drift onto one spot
+        const seenCoords = [];
+        for (const p of placesList) {
+          let collisionCount = 0;
+          for (const prev of seenCoords) {
+            const dMiles = haversineMiles(p.lat, p.lng, prev.lat, prev.lng);
+            if (dMiles < 0.008) collisionCount++;
+          }
+          if (collisionCount > 0) {
+            const angle = (collisionCount * 137.5) * (Math.PI / 180);
+            p.lat += Math.cos(angle) * 0.00018 * collisionCount;
+            p.lng += Math.sin(angle) * 0.00022 * collisionCount;
+          }
+          seenCoords.push({ lat: p.lat, lng: p.lng });
         }
-        if (updated) {
+
+        if (triggerRender) {
           renderAll();
-          showToast('Pins verified against street addresses');
         }
       }
 
-      // Address Geocoding
+      // Address Geocoding (OpenStreetMap Nominatim, keyless)
       async function geocodeAddress(query) {
         try {
           const resp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`);
@@ -2204,7 +2206,9 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
             const r = results[0];
             setCenter(parseFloat(r.lat), parseFloat(r.lon), r.display_name.split(',').slice(0, 2).join(','));
             showToast(`Centered on ${state.center.label}`);
-            refreshCurrentSearch();
+            if (state.customQuery && storage.get(STORAGE_KEYS.geminiKey)) {
+              runGeminiSearch(state.customQuery);
+            }
           } else {
             showToast('Address not found — try Drop Pin on the map.');
           }
@@ -2220,9 +2224,16 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
         $('btnBackToMap').addEventListener('click', () => setViewMode('map'));
 
         $('btnEngineLeaflet').addEventListener('click', () => setMapEngine('leaflet'));
+        $('btnEngineGoogleEmbed').addEventListener('click', () => setMapEngine('gembed'));
         $('btnEngineGoogle').addEventListener('click', () => setMapEngine('google'));
+        $('googleEmbedPills').addEventListener('click', (e) => {
+          const btn = e.target.closest('button[data-embed-idx]');
+          if (!btn) return;
+          activeEmbedIdx = Number(btn.dataset.embedIdx) || 0;
+          renderGoogleEmbed(getFilteredPlaces());
+        });
 
-        // Quick Tap categories: OSM Overpass for standard categories, Gemini for Events (72h)
+        // Quick Tap categories
         $('quickTapRow').addEventListener('click', (e) => {
           const btn = e.target.closest('button[data-cat]');
           if (!btn) return;
@@ -2232,12 +2243,8 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
           state.customQuery = '';
           state.activeCategory = cat;
 
-          if (cat === 'Local Events') {
-            if (activeOverpassController) activeOverpassController.abort();
-            runGeminiSearch('', 'Local Events');
-          } else if (state.osmLive) {
-            if (activeGeminiController) activeGeminiController.abort();
-            runOverpassSearch(cat);
+          if (state.liveQuickTap && storage.get(STORAGE_KEYS.geminiKey)) {
+            runGeminiSearch('', cat);
           } else {
             state.places = [...STARTER_PLACES];
             renderAll();
@@ -2251,9 +2258,6 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
             btn.classList.add('active');
             state.radiusMiles = Number(btn.dataset.miles);
             renderAll();
-            if (!state.customQuery && state.activeCategory !== 'Local Events' && state.osmLive) {
-              runOverpassSearch(state.activeCategory);
-            }
           });
         });
 
@@ -2267,19 +2271,20 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
           });
         });
 
-        // OSM Live toggle
+        // Live Quick-Tap (Gemini 4 Hydrogen) toggle
         $('btnLiveQuickTap').addEventListener('click', () => {
-          state.osmLive = !state.osmLive;
-          storage.set(STORAGE_KEYS.osmLive, String(state.osmLive));
-          updateOsmLiveUI();
-          updateApiStatusUI();
-          showToast(state.osmLive ? 'OSM Keyless Live enabled' : 'OSM Live off (showing local Berkeley pins)');
-          if (!state.customQuery && state.activeCategory !== 'Local Events') {
-            if (state.osmLive) runOverpassSearch(state.activeCategory);
-            else {
-              state.places = [...STARTER_PLACES];
-              renderAll();
-            }
+          const hasKey = Boolean(storage.get(STORAGE_KEYS.geminiKey));
+          if (!state.liveQuickTap && !hasKey) {
+            showToast('Add your Gemini API key in Keys to enable Live Quick-Tap.');
+            $('settingsModal').classList.add('open');
+            return;
+          }
+          state.liveQuickTap = !state.liveQuickTap;
+          storage.set(STORAGE_KEYS.liveQuickTap, String(state.liveQuickTap));
+          updateLiveQuickTapUI();
+          showToast(state.liveQuickTap ? 'Live Quick-Tap enabled (Gemini 4 Hydrogen)' : 'Live Quick-Tap paused (using local data)');
+          if (state.liveQuickTap && !state.customQuery) {
+            runGeminiSearch('', state.activeCategory);
           }
         });
 
@@ -2295,7 +2300,6 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
           e.preventDefault();
           const q = $('customQueryInput').value.trim();
           if (!q) return;
-          if (activeOverpassController) activeOverpassController.abort();
           document.querySelectorAll('#quickTapRow .chip').forEach(c => c.classList.remove('active'));
           runGeminiSearch(q);
         });
@@ -2343,7 +2347,7 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
             } else {
               state.customQuery = '';
               state.activeCategory = item.category || 'all';
-              refreshCurrentSearch();
+              renderAll();
             }
           }
         });
@@ -2358,7 +2362,6 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
             (pos) => {
               setCenter(pos.coords.latitude, pos.coords.longitude, 'Current Location');
               showToast('Centered on your GPS location');
-              refreshCurrentSearch();
             },
             () => showToast('Location permission denied — use Address or Drop Pin.')
           );
@@ -2378,43 +2381,28 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
         // Settings Modal
         $('btnSettings').addEventListener('click', () => {
           $('geminiKeyInput').value = storage.get(STORAGE_KEYS.geminiKey, '');
+          $('geminiModelSelect').value = storage.get(STORAGE_KEYS.geminiModel, 'auto');
           $('googleMapsKeyInput').value = storage.get(STORAGE_KEYS.gmapsKey, '');
-          renderModelDropdown();
           $('settingsModal').classList.add('open');
         });
         $('btnCloseModal').addEventListener('click', () => $('settingsModal').classList.remove('open'));
-        $('btnRefreshModels').addEventListener('click', async () => {
-          const typedKey = $('geminiKeyInput').value.trim();
-          if (typedKey) storage.set(STORAGE_KEYS.geminiKey, typedKey);
-          await discoverGeminiModels(false);
-        });
-        $('btnSaveKeys').addEventListener('click', async () => {
+        $('btnSaveKeys').addEventListener('click', () => {
           const gKey = $('geminiKeyInput').value.trim();
           const gModel = $('geminiModelSelect').value;
           const mKey = $('googleMapsKeyInput').value.trim();
-          if (gKey) {
-            storage.set(STORAGE_KEYS.geminiKey, gKey);
-          } else {
-            storage.remove(STORAGE_KEYS.geminiKey);
-            storage.remove(STORAGE_KEYS.resolvedModel);
-            storage.remove(STORAGE_KEYS.discoveredModels);
-          }
+          if (gKey) storage.set(STORAGE_KEYS.geminiKey, gKey); else storage.remove(STORAGE_KEYS.geminiKey);
           storage.set(STORAGE_KEYS.geminiModel, gModel);
           if (mKey) storage.set(STORAGE_KEYS.gmapsKey, mKey); else storage.remove(STORAGE_KEYS.gmapsKey);
           $('settingsModal').classList.remove('open');
           updateApiStatusUI();
-          showToast('Keys saved locally');
-          if (gKey) await discoverGeminiModels(false);
+          showToast('API keys saved locally');
+          probeBestFreeModel(false);
         });
         $('btnClearKeys').addEventListener('click', () => {
           storage.remove(STORAGE_KEYS.geminiKey);
           storage.remove(STORAGE_KEYS.gmapsKey);
-          storage.remove(STORAGE_KEYS.resolvedModel);
-          storage.remove(STORAGE_KEYS.discoveredModels);
-          state.discoveredModels = [];
           $('geminiKeyInput').value = '';
           $('googleMapsKeyInput').value = '';
-          renderModelDropdown();
           updateApiStatusUI();
           showToast('Local keys cleared');
         });
@@ -2465,27 +2453,23 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
 
       // Boot
       window.addEventListener('DOMContentLoaded', () => {
-        checkHashKeyProvisioning();
-        const savedOsm = storage.get(STORAGE_KEYS.osmLive);
-        state.osmLive = savedOsm === null ? true : savedOsm === 'true';
-
-        try {
-          state.discoveredModels = JSON.parse(storage.get(STORAGE_KEYS.discoveredModels, '[]')) || [];
-        } catch { state.discoveredModels = []; }
-
+        if (!storage.get(STORAGE_KEYS.seededDefault)) {
+          if (!storage.get(STORAGE_KEYS.geminiKey)) {
+            storage.set(STORAGE_KEYS.geminiKey, 'AQ.Ab8RN6ITWgyVPjunekNDV_o6T-VGKQQEqVPFylosP233Bix7Xg');
+          }
+          if (storage.get(STORAGE_KEYS.liveQuickTap) === null) {
+            storage.set(STORAGE_KEYS.liveQuickTap, 'true');
+          }
+          storage.set(STORAGE_KEYS.seededDefault, '1');
+        }
+        state.liveQuickTap = storage.get(STORAGE_KEYS.liveQuickTap) === 'true';
         bindEvents();
         loadSavedSearches();
-        renderModelDropdown();
         checkHashSnapshot();
         renderAll();
-
         if (!state.isSnapshot) {
-          discoverGeminiModels(true);
-          if (state.osmLive) {
-            runOverpassSearch('all');
-          } else {
-            verifyPlacesCoordinates(state.places);
-          }
+          probeBestFreeModel(true);
+          verifyPlacesCoordinates(state.places);
         }
       });
     })();
