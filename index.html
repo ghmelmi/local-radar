@@ -865,14 +865,14 @@
       <div class="field">
         <label for="geminiModelSelect">Gemini Model</label>
         <select id="geminiModelSelect">
-          <option value="auto">Auto — Highest Available Free Tier (Default: 2.5 Flash)</option>
-          <option value="gemini-2.5-flash">Gemini 2.5 Flash (Free Tier Default)</option>
-          <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite (Free Tier)</option>
-          <option value="gemini-3.6-flash">Gemini 3.6 Flash (Free Tier)</option>
+          <option value="auto">Auto — Highest Available Free Tier (Default: 3.8 Flash)</option>
           <option value="gemini-3.8-flash">Gemini 3.8 Flash (Highest 3.x Free Tier)</option>
+          <option value="gemini-3.6-flash">Gemini 3.6 Flash (Free Tier)</option>
+          <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite (Free Tier)</option>
           <option value="gemini-4-hydrogen">Gemini 4 Hydrogen (Fastest 4.x)</option>
           <option value="gemini-4-argon">Gemini 4 Argon (Paid Tier)</option>
           <option value="gemini-4-carbon">Gemini 4 Carbon (Paid Tier)</option>
+          <option value="gemini-2.5-flash">Gemini 2.5 Flash (Legacy)</option>
         </select>
       </div>
       <div class="field">
@@ -1193,6 +1193,7 @@
         btn.textContent = active ? 'Live Quick-Tap: On' : 'Live Quick-Tap: Off';
       }
 
+      const DEFAULT_MODEL = 'gemini-3.8-flash';
       const MODEL_PRIORITY = [
         'gemini-4-hydrogen',
         'gemini-3.8-flash',
@@ -1204,7 +1205,8 @@
       function getActiveModel() {
         const pref = storage.get(STORAGE_KEYS.geminiModel, 'auto');
         if (pref && pref !== 'auto') return pref;
-        return storage.get(STORAGE_KEYS.resolvedModel, 'gemini-2.5-flash');
+        const resolved = storage.get(STORAGE_KEYS.resolvedModel, DEFAULT_MODEL);
+        return resolved === 'gemini-2.5-flash' ? DEFAULT_MODEL : resolved;
       }
 
       function updateApiStatusUI() {
@@ -1244,7 +1246,7 @@
           const candidates = availableSet
             ? MODEL_PRIORITY.filter(m => availableSet.has(m))
             : [...MODEL_PRIORITY];
-          if (!candidates.includes('gemini-2.5-flash')) candidates.push('gemini-2.5-flash');
+          if (!candidates.includes(DEFAULT_MODEL)) candidates.unshift(DEFAULT_MODEL);
 
           for (const model of candidates) {
             try {
@@ -1267,10 +1269,10 @@
               }
             } catch {}
           }
-          storage.set(STORAGE_KEYS.resolvedModel, 'gemini-2.5-flash');
+          storage.set(STORAGE_KEYS.resolvedModel, DEFAULT_MODEL);
           updateApiStatusUI();
         } catch {
-          storage.set(STORAGE_KEYS.resolvedModel, 'gemini-2.5-flash');
+          storage.set(STORAGE_KEYS.resolvedModel, DEFAULT_MODEL);
           updateApiStatusUI();
         }
       }
@@ -1584,7 +1586,7 @@
         }
       }
 
-      // Gemini Live Search (with Google Search grounding)
+      // Gemini Live Search (with Google Search grounding & automatic deprecation/quota fallback)
       async function runGeminiSearch(promptText, categoryOverride = null) {
         const apiKey = storage.get(STORAGE_KEYS.geminiKey);
         if (!apiKey) {
@@ -1666,7 +1668,12 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
               const errData = await resp.json().catch(() => ({}));
               const msg = errData.error?.message || `HTTP ${resp.status}`;
               lastErr = new Error(msg);
-              if (resp.status === 429 || resp.status === 404 || /quota|exceeded|not found/i.test(msg)) {
+              if (
+                resp.status === 400 ||
+                resp.status === 429 ||
+                resp.status === 404 ||
+                /quota|exceeded|not found|no longer available|deprecated/i.test(msg)
+              ) {
                 continue;
               }
               throw lastErr;
@@ -1706,7 +1713,7 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
             verifyPlacesCoordinates(state.places);
             return;
           }
-          throw lastErr || new Error('All Gemini models hit quota limits');
+          throw lastErr || new Error('All Gemini models hit quota or availability limits');
         } catch (err) {
           if (categoryOverride) {
             state.customQuery = '';
@@ -1844,7 +1851,6 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
         }
 
         if (provisioned) {
-          // Immediately scrub key from URL bar & browser history
           if (window.history && window.history.replaceState) {
             window.history.replaceState(null, document.title, window.location.pathname + window.location.search);
           } else {
