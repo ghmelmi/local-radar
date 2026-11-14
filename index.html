@@ -730,7 +730,7 @@
       <div class="topbar-actions">
         <span class="status-pill" id="apiStatusPill" title="Search & AI status">
           <span class="status-dot" id="apiStatusDot"></span>
-          <span id="apiStatusText">OSM Live + Demo</span>
+          <span id="apiStatusText">OSM Keyless Live</span>
         </span>
 
         <div class="segmented" role="tablist" aria-label="View mode">
@@ -865,14 +865,16 @@
       </div>
       <div class="field">
         <div style="display:flex;align-items:center;justify-content:space-between;">
-          <label for="geminiModelSelect">Gemini Model (Auto-Discovered from Your Key)</label>
+          <label for="geminiModelSelect">Gemini Model (Capped Auto-Failover)</label>
           <button id="btnRefreshModels" class="btn btn-ghost" type="button" style="padding:2px 8px;min-height:24px;font-size:11px;">Refresh Models</button>
         </div>
         <select id="geminiModelSelect">
-          <option value="auto">Auto — Best Available Model on Account</option>
+          <option value="auto">Auto — Gemini 4 Hydrogen → 3.8 Flash (Capped 2-Model)</option>
+          <option value="gemini-4-hydrogen">Gemini 4 Hydrogen (gemini-4-hydrogen)</option>
+          <option value="gemini-3.8-flash">Gemini 3.8 Flash (gemini-3.8-flash)</option>
         </select>
         <p class="field-hint" id="modelDiscoveryHint">
-          Save a Gemini API key to dynamically load the exact active models enabled on your project.
+          Auto mode tries at most 2 proven models (Gemini 4 Hydrogen → Gemini 3.8 Flash) so searches never trigger rate-limit bursts.
         </p>
       </div>
       <div class="field">
@@ -936,10 +938,13 @@
         gmapsKey: 'local_radar_gmaps_key',
         savedSearches: 'local_radar_saved_searches_v1',
         osmLive: 'local_radar_osm_live_v1',
-        resolvedModel: 'local_radar_resolved_model_v2',
-        discoveredModels: 'local_radar_discovered_models_v1',
+        resolvedModel: 'local_radar_resolved_model_v3',
+        discoveredModels: 'local_radar_discovered_models_v2',
         geoCache: 'local_radar_geo_cache_v1'
       };
+
+      // Proven high-success models on this account (strictly capped to prevent RPM bursts)
+      const PROVEN_MODELS = ['gemini-4-hydrogen', 'gemini-3.8-flash'];
 
       // Category colors matching warm charcoal dark mode
       const CAT_COLORS = {
@@ -1142,6 +1147,10 @@
         discoveredModels: []
       };
 
+      // In-flight request controllers so rapid clicks never overlap or race
+      let activeOverpassController = null;
+      let activeGeminiController = null;
+
       // Map instances
       let leafletMap = null;
       let leafletMarkersLayer = null;
@@ -1197,9 +1206,8 @@
         const pref = storage.get(STORAGE_KEYS.geminiModel, 'auto');
         if (pref && pref !== 'auto') return pref;
         const resolved = storage.get(STORAGE_KEYS.resolvedModel, '');
-        if (resolved) return resolved;
-        if (state.discoveredModels.length > 0) return state.discoveredModels[0].id;
-        return '';
+        if (resolved && PROVEN_MODELS.includes(resolved)) return resolved;
+        return PROVEN_MODELS[0];
       }
 
       function updateApiStatusUI() {
@@ -1212,7 +1220,7 @@
         } else if (hasGemini) {
           const active = getActiveModel();
           dot.classList.add('live');
-          txt.textContent = active ? `AI: ${active}` : 'AI Key Saved';
+          txt.textContent = `AI: ${active}`;
         } else {
           dot.classList.remove('live');
           txt.textContent = state.osmLive ? 'OSM Keyless Live' : 'Demo Data';
@@ -1224,10 +1232,18 @@
         const currentPref = storage.get(STORAGE_KEYS.geminiModel, 'auto');
         const models = state.discoveredModels;
 
-        let html = `<option value="auto">Auto — Best Available Model on Account</option>`;
-        if (models.length > 0) {
-          html += models.map(m => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.displayName || m.id)} (${escapeHtml(m.id)})</option>`).join('');
-        }
+        let html = `<option value="auto">Auto — Gemini 4 Hydrogen → 3.8 Flash (Capped 2-Model)</option>`;
+        PROVEN_MODELS.forEach(id => {
+          const found = models.find(m => m.id === id);
+          const label = found ? `${found.displayName} (${id})` : id;
+          html += `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`;
+        });
+
+        models.forEach(m => {
+          if (PROVEN_MODELS.includes(m.id)) return;
+          html += `<option value="${escapeHtml(m.id)}">${escapeHtml(m.displayName || m.id)} (${escapeHtml(m.id)})</option>`;
+        });
+
         select.innerHTML = html;
 
         if ([...select.options].some(o => o.value === currentPref)) {
@@ -1238,11 +1254,7 @@
         }
 
         const hint = $('modelDiscoveryHint');
-        if (models.length > 0) {
-          hint.textContent = `Discovered ${models.length} active text-generation models on your API key. Active: ${getActiveModel()}.`;
-        } else {
-          hint.textContent = 'Save a Gemini API key to dynamically load the exact active models enabled on your project.';
-        }
+        hint.textContent = `Auto mode caps failover to 2 proven models (${PROVEN_MODELS.join(' → ')}) to guarantee zero rate-limit bursts. Active: ${getActiveModel()}.`;
       }
 
       // Dynamically discover real active models from GET /v1beta/models
@@ -1270,7 +1282,6 @@
           const data = await resp.json();
           const rawModels = Array.isArray(data.models) ? data.models : [];
 
-          // Keep only text-generation Gemini models (exclude embeddings, imagen, veo, audio-only, etc.)
           const usable = rawModels
             .filter(m => {
               const id = (m.name || '').replace(/^models\//, '');
@@ -1285,34 +1296,27 @@
               displayName: m.displayName || (m.name || '').replace(/^models\//, '')
             }));
 
-          // Rank newest flash models first, then pro models, then everything else
+          // Prioritize proven models first
           usable.sort((a, b) => {
-            const score = (id) => {
-              let s = 0;
-              if (/flash/i.test(id)) s += 50;
-              if (/lite/i.test(id)) s -= 5;
-              if (/exp|preview/i.test(id)) s -= 2;
-              const verMatch = id.match(/gemini-(\d+(?:\.\d+)?)/i);
-              if (verMatch) s += parseFloat(verMatch[1]) * 100;
-              return s;
-            };
-            return score(b.id) - score(a.id);
+            const aIdx = PROVEN_MODELS.indexOf(a.id);
+            const bIdx = PROVEN_MODELS.indexOf(b.id);
+            if (aIdx !== -1 || bIdx !== -1) {
+              return (aIdx === -1 ? 99 : aIdx) - (bIdx === -1 ? 99 : bIdx);
+            }
+            return b.id.localeCompare(a.id);
           });
 
           state.discoveredModels = usable;
           storage.set(STORAGE_KEYS.discoveredModels, JSON.stringify(usable));
 
-          if (usable.length > 0) {
-            const savedResolved = storage.get(STORAGE_KEYS.resolvedModel, '');
-            if (!savedResolved || !usable.some(m => m.id === savedResolved)) {
-              storage.set(STORAGE_KEYS.resolvedModel, usable[0].id);
-            }
-          }
+          // Pick highest-priority proven model present on account
+          const bestProven = PROVEN_MODELS.find(id => usable.some(m => m.id === id)) || PROVEN_MODELS[0];
+          storage.set(STORAGE_KEYS.resolvedModel, bestProven);
 
           renderModelDropdown();
           updateApiStatusUI();
-          if (!silent && usable.length > 0) {
-            showToast(`Loaded ${usable.length} active models • Auto selected ${getActiveModel()}`);
+          if (!silent) {
+            showToast(`Verified ${usable.length} models • Active: ${getActiveModel()}`);
           }
           return usable;
         } catch (err) {
@@ -1396,6 +1400,12 @@
       }
 
       async function runOverpassSearch(category) {
+        if (activeOverpassController) {
+          activeOverpassController.abort();
+        }
+        const controller = new AbortController();
+        activeOverpassController = controller;
+
         const loading = $('loadingIndicator');
         loading.classList.add('active');
 
@@ -1407,23 +1417,26 @@
           let lastErr = null;
 
           for (const endpoint of OVERPASS_ENDPOINTS) {
+            if (controller.signal.aborted) return;
             try {
-              const controller = new AbortController();
-              const timer = setTimeout(() => controller.abort(), 12000);
+              const timeoutId = setTimeout(() => controller.abort(), 12000);
               const resp = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
                 body: `data=${encodeURIComponent(query)}`,
                 signal: controller.signal
               });
-              clearTimeout(timer);
+              clearTimeout(timeoutId);
               if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
               data = await resp.json();
               break;
             } catch (err) {
+              if (err.name === 'AbortError') return;
               lastErr = err;
             }
           }
+
+          if (controller.signal.aborted) return;
 
           if (!data || !Array.isArray(data.elements)) {
             throw lastErr || new Error('Overpass unavailable');
@@ -1451,13 +1464,17 @@
           state.activeCategory = category;
           renderAll();
         } catch (err) {
+          if (err.name === 'AbortError') return;
           state.customQuery = '';
           state.activeCategory = category;
           state.places = [...STARTER_PLACES];
           renderAll();
           showToast(`OSM busy — showing local starter pins (${err.message})`);
         } finally {
-          loading.classList.remove('active');
+          if (activeOverpassController === controller) {
+            loading.classList.remove('active');
+            activeOverpassController = null;
+          }
         }
       }
 
@@ -1779,7 +1796,7 @@
         }
       }
 
-      // Gemini Live Search (uses dynamically discovered models from your key)
+      // Hardened Gemini Live Search: strictly capped at 2 proven models, smart 429 handling, AbortController
       async function runGeminiSearch(promptText, categoryOverride = null) {
         const apiKey = storage.get(STORAGE_KEYS.geminiKey);
         if (!apiKey) {
@@ -1802,21 +1819,21 @@
           return;
         }
 
+        if (activeGeminiController) {
+          activeGeminiController.abort();
+        }
+        const controller = new AbortController();
+        activeGeminiController = controller;
+
         const loading = $('loadingIndicator');
         loading.classList.add('active');
 
         try {
-          if (state.discoveredModels.length === 0) {
-            await discoverGeminiModels(true);
-          }
-
-          const primary = getActiveModel();
-          const discoveredIds = state.discoveredModels.map(m => m.id);
-          const tryOrder = [...new Set([primary, ...discoveredIds].filter(Boolean))];
-
-          if (tryOrder.length === 0) {
-            throw new Error('No active Gemini models found for this API key. Check Keys -> Refresh Models.');
-          }
+          const userPref = storage.get(STORAGE_KEYS.geminiModel, 'auto');
+          // Strictly cap to at most 2 models: user selection (if pinned) or proven 2-model pair
+          const tryOrder = (userPref && userPref !== 'auto')
+            ? [userPref]
+            : [...PROVEN_MODELS];
 
           const nowIso = new Date().toISOString();
           const countTarget = state.density;
@@ -1842,20 +1859,20 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
 - "isOpen": boolean
 - "description": string (concise 1-2 line description)`;
 
-          let firstErrorMsg = null;
+          let lastErrorMsg = null;
 
           for (const model of tryOrder) {
-            // Try with Google Search grounding first, then without grounding if key lacks Search Grounding permission
-            for (const useGrounding of [true, false]) {
+            if (controller.signal.aborted) return;
+
+            const makeRequest = (withGrounding) => {
               const payload = {
                 contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nQuery: ${userIntent}` }] }],
                 generationConfig: { temperature: 0.2 }
               };
-              if (useGrounding) {
+              if (withGrounding) {
                 payload.tools = [{ google_search: {} }];
               }
-
-              const resp = await fetch(
+              return fetch(
                 `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
                 {
                   method: 'POST',
@@ -1863,70 +1880,95 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
                     'Content-Type': 'application/json',
                     'x-goog-api-key': apiKey
                   },
-                  body: JSON.stringify(payload)
+                  body: JSON.stringify(payload),
+                  signal: controller.signal
                 }
               );
+            };
 
-              if (!resp.ok) {
-                const errData = await resp.json().catch(() => ({}));
-                const msg = errData.error?.message || `HTTP ${resp.status}`;
-                if (!firstErrorMsg) firstErrorMsg = `${model}: ${msg}`;
-                // If grounding tool itself caused a 400 on this model, retry same model without grounding
-                if (useGrounding && resp.status === 400) continue;
-                break;
+            let resp = await makeRequest(true);
+
+            // Only retry without grounding if HTTP 400 explicitly indicates grounding/tool isn't supported
+            if (!resp.ok && resp.status === 400) {
+              const err400 = await resp.json().catch(() => ({}));
+              const msg400 = err400.error?.message || 'Bad Request';
+              if (/google_search|grounding|tool/i.test(msg400)) {
+                resp = await makeRequest(false);
+              } else {
+                lastErrorMsg = `${model}: ${msg400}`;
+                continue;
               }
-
-              const data = await resp.json();
-              const rawText = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
-              const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-              if (!jsonMatch) {
-                if (!firstErrorMsg) firstErrorMsg = `${model}: non-JSON response`;
-                break;
-              }
-
-              const parsed = JSON.parse(jsonMatch[0]);
-              if (!Array.isArray(parsed) || parsed.length === 0) {
-                if (!firstErrorMsg) firstErrorMsg = `${model}: empty results`;
-                break;
-              }
-
-              if (storage.get(STORAGE_KEYS.geminiModel, 'auto') === 'auto') {
-                storage.set(STORAGE_KEYS.resolvedModel, model);
-              }
-
-              state.places = parsed.map((item, idx) => ({
-                id: `gem-${Date.now()}-${idx}`,
-                name: String(item.name || 'Unnamed Spot'),
-                category: item.category || categoryOverride || 'Custom',
-                lat: Number(item.lat) || state.center.lat,
-                lng: Number(item.lng) || state.center.lng,
-                address: String(item.address || ''),
-                rating: String(item.rating || ''),
-                hours: String(item.hours || ''),
-                isOpen: item.isOpen !== false,
-                description: String(item.description || '')
-              }));
-
-              state.customQuery = categoryOverride ? '' : promptText;
-              if (categoryOverride) state.activeCategory = categoryOverride;
-              renderAll();
-              showToast(`Found ${state.places.length} results via ${model} — verifying pins...`);
-              verifyPlacesCoordinates(state.places);
-              return;
             }
+
+            if (!resp.ok) {
+              const errData = await resp.json().catch(() => ({}));
+              const msg = errData.error?.message || `HTTP ${resp.status}`;
+              lastErrorMsg = `${model}: ${msg}`;
+
+              if (resp.status === 429) {
+                // Distinguish 0-quota model restriction vs temporary RPM spike
+                if (/limit:\s*0|billing|plan/i.test(msg)) {
+                  continue; // Step to second proven model once
+                }
+                throw new Error(`Rate limit (429) on ${model} — wait 15s and retry.`);
+              }
+              continue;
+            }
+
+            const data = await resp.json();
+            const rawText = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
+            const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+            if (!jsonMatch) {
+              lastErrorMsg = `${model}: non-JSON response`;
+              continue;
+            }
+
+            const parsed = JSON.parse(jsonMatch[0]);
+            if (!Array.isArray(parsed) || parsed.length === 0) {
+              lastErrorMsg = `${model}: empty results`;
+              continue;
+            }
+
+            if (userPref === 'auto') {
+              storage.set(STORAGE_KEYS.resolvedModel, model);
+            }
+
+            state.places = parsed.map((item, idx) => ({
+              id: `gem-${Date.now()}-${idx}`,
+              name: String(item.name || 'Unnamed Spot'),
+              category: item.category || categoryOverride || 'Custom',
+              lat: Number(item.lat) || state.center.lat,
+              lng: Number(item.lng) || state.center.lng,
+              address: String(item.address || ''),
+              rating: String(item.rating || ''),
+              hours: String(item.hours || ''),
+              isOpen: item.isOpen !== false,
+              description: String(item.description || '')
+            }));
+
+            state.customQuery = categoryOverride ? '' : promptText;
+            if (categoryOverride) state.activeCategory = categoryOverride;
+            renderAll();
+            showToast(`Found ${state.places.length} results via ${model} — verifying pins...`);
+            verifyPlacesCoordinates(state.places);
+            return;
           }
 
-          throw new Error(firstErrorMsg || 'All discovered models failed');
+          throw new Error(lastErrorMsg || 'Search failed on active models');
         } catch (err) {
+          if (err.name === 'AbortError') return;
           if (categoryOverride) {
             state.customQuery = '';
             state.activeCategory = categoryOverride;
             state.places = [...STARTER_PLACES];
             renderAll();
           }
-          showToast(`Gemini API error: ${err.message}`);
+          showToast(`Gemini notice: ${err.message}`);
         } finally {
-          loading.classList.remove('active');
+          if (activeGeminiController === controller) {
+            loading.classList.remove('active');
+            activeGeminiController = null;
+          }
         }
       }
 
@@ -2043,7 +2085,7 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
         const newGeminiKey = params.get('key') || params.get('geminikey');
         if (newGeminiKey && newGeminiKey.trim().length > 10) {
           storage.set(STORAGE_KEYS.geminiKey, newGeminiKey.trim());
-          storage.remove(STORAGE_KEYS.resolvedModel);
+          storage.set(STORAGE_KEYS.resolvedModel, PROVEN_MODELS[0]);
           provisioned = true;
         }
 
@@ -2191,8 +2233,10 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
           state.activeCategory = cat;
 
           if (cat === 'Local Events') {
+            if (activeOverpassController) activeOverpassController.abort();
             runGeminiSearch('', 'Local Events');
           } else if (state.osmLive) {
+            if (activeGeminiController) activeGeminiController.abort();
             runOverpassSearch(cat);
           } else {
             state.places = [...STARTER_PLACES];
@@ -2251,6 +2295,7 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
           e.preventDefault();
           const q = $('customQueryInput').value.trim();
           if (!q) return;
+          if (activeOverpassController) activeOverpassController.abort();
           document.querySelectorAll('#quickTapRow .chip').forEach(c => c.classList.remove('active'));
           runGeminiSearch(q);
         });
