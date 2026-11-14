@@ -1,16 +1,4 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Local Radar</title>
-</head>
-<body>
-    <h1>Local Radar</h1>
-    <p>Welcome to Local Radar!</p>
-</body>
-</html>
-<!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
@@ -359,13 +347,6 @@
     .chip-remove:hover {
       background: rgba(255, 255, 255, 0.14);
       color: var(--text-primary);
-    }
-
-    .divider-v {
-      width: 1px;
-      height: 20px;
-      background: var(--border-subtle);
-      margin: 0 2px;
     }
 
     .control-label {
@@ -822,7 +803,7 @@
           </div>
 
           <button id="btnOpenNow" class="chip active" type="button" title="Filter to open places when hours are known">Open Now</button>
-          <button id="btnLiveQuickTap" class="chip" type="button" title="Use Gemini 4 Hydrogen for up-to-the-minute Quick Tap results">Live Quick-Tap: Off</button>
+          <button id="btnLiveQuickTap" class="chip" type="button" title="Use Gemini for up-to-the-minute Quick Tap results">Live Quick-Tap: Off</button>
 
           <span id="loadingIndicator" class="loading-pill">
             <span class="pulse-dot"></span>
@@ -876,9 +857,9 @@
       </div>
       <div class="field">
         <label for="geminiKeyInput">Gemini API Key (Google AI Studio)</label>
-        <input id="geminiKeyInput" type="password" placeholder="AQ.... or AIza..." autocomplete="off" />
+        <input id="geminiKeyInput" type="password" placeholder="AIza..." autocomplete="off" />
         <p class="field-hint">
-          Powers live Custom Search and 72-hour Local Events via Gemini + Google Search grounding. Stored only in your browser's localStorage and never included in stamped share links.
+          Stored strictly in this device's <code>localStorage</code> and never included in GitHub or stamped share links. Tip: you can also open <code>#key=YOUR_KEY</code> once on any device to save it automatically.
         </p>
       </div>
       <div class="field">
@@ -955,7 +936,6 @@
         gmapsKey: 'local_radar_gmaps_key',
         savedSearches: 'local_radar_saved_searches_v1',
         liveQuickTap: 'local_radar_live_quick_tap',
-        seededDefault: 'local_radar_seeded_v1',
         resolvedModel: 'local_radar_resolved_model',
         geoCache: 'local_radar_geo_cache_v1'
       };
@@ -1148,8 +1128,8 @@
         radiusMiles: 3,
         density: 10,
         openNow: true,
-        viewMode: 'map', // 'map' | 'list'
-        mapEngine: 'leaflet', // 'leaflet' | 'google'
+        viewMode: 'map',
+        mapEngine: 'leaflet',
         activeCategory: 'all',
         customQuery: '',
         places: [...STARTER_PLACES],
@@ -1173,7 +1153,6 @@
       let gmapInfoWindow = null;
       let gmapLoaded = false;
 
-      // DOM helpers
       const $ = (id) => document.getElementById(id);
 
       function showToast(msg) {
@@ -1240,7 +1219,7 @@
           txt.textContent = `Live: ${getActiveModel()}`;
         } else {
           dot.classList.remove('live');
-          txt.textContent = 'Demo Data';
+          txt.textContent = 'Demo Data (Add Key)';
         }
       }
 
@@ -1283,7 +1262,7 @@
               if (r.ok) {
                 storage.set(STORAGE_KEYS.resolvedModel, model);
                 updateApiStatusUI();
-                if (!silent) showToast(`Auto-selected highest free tier: ${model}`);
+                if (!silent) showToast(`Connected: ${model}`);
                 return;
               }
             } catch {}
@@ -1310,7 +1289,6 @@
           list = list.filter(p => p.isOpen !== false);
         }
 
-        // Keep within radius (with slight grace for demo items if far)
         const within = list.filter(p => p.distance <= state.radiusMiles);
         const finalPool = within.length > 0 ? within : list;
 
@@ -1576,7 +1554,6 @@
           ? `Stamped ${new Date(state.snapshotTimestamp).toLocaleString()}`
           : 'Ready';
 
-        // Map engine visibility
         if (state.mapEngine === 'google' && gmapLoaded) {
           $('leafletMap').style.display = 'none';
           $('googleMap').style.display = 'block';
@@ -1611,12 +1588,11 @@
       async function runGeminiSearch(promptText, categoryOverride = null) {
         const apiKey = storage.get(STORAGE_KEYS.geminiKey);
         if (!apiKey) {
-          showToast('Using Demo Data — add a Gemini API key in Keys for live search.');
+          showToast('Demo Data — tap "Keys" in top right to add your Gemini API key.');
           if (categoryOverride) {
             state.customQuery = '';
             state.activeCategory = categoryOverride;
           } else {
-            // Simple local filter fallback for demo mode
             state.customQuery = promptText;
             const q = promptText.toLowerCase();
             const matched = STARTER_PLACES.filter(p =>
@@ -1738,7 +1714,7 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
             state.places = [...STARTER_PLACES];
             renderAll();
           }
-          showToast(`Quota limit — showing local data (${err.message})`);
+          showToast(`API notice — showing local data (${err.message})`);
         } finally {
           loading.classList.remove('active');
         }
@@ -1847,6 +1823,37 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
         return JSON.parse(new TextDecoder().decode(bytes));
       }
 
+      // One-tap device provisioning via #key=... or #gmapskey=... (immediately scrubbed from URL bar)
+      function checkHashKeyProvisioning() {
+        const hash = window.location.hash || '';
+        if (!hash || hash.startsWith('#snapshot=')) return;
+        const params = new URLSearchParams(hash.slice(1));
+        let provisioned = false;
+
+        const newGeminiKey = params.get('key') || params.get('geminikey');
+        if (newGeminiKey && newGeminiKey.trim().length > 10) {
+          storage.set(STORAGE_KEYS.geminiKey, newGeminiKey.trim());
+          storage.set(STORAGE_KEYS.liveQuickTap, 'true');
+          provisioned = true;
+        }
+
+        const newMapsKey = params.get('gmapskey') || params.get('mapskey');
+        if (newMapsKey && newMapsKey.trim().length > 10) {
+          storage.set(STORAGE_KEYS.gmapsKey, newMapsKey.trim());
+          provisioned = true;
+        }
+
+        if (provisioned) {
+          // Immediately scrub key from URL bar & browser history
+          if (window.history && window.history.replaceState) {
+            window.history.replaceState(null, document.title, window.location.pathname + window.location.search);
+          } else {
+            window.location.hash = '';
+          }
+          showToast('API key saved to this device & cleared from URL');
+        }
+      }
+
       function checkHashSnapshot() {
         const hash = window.location.hash || '';
         if (!hash.startsWith('#snapshot=')) return false;
@@ -1866,7 +1873,7 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
         }
       }
 
-      // Pin-to-Address Verification Harness (Google Geocoder if loaded, else cached Nominatim)
+      // Pin-to-Address Verification Harness
       let gmapGeocoder = null;
       function getGeoCache() {
         try { return JSON.parse(storage.get(STORAGE_KEYS.geoCache, '{}')) || {}; } catch { return {}; }
@@ -1937,7 +1944,7 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
         }
       }
 
-      // Address Geocoding (OpenStreetMap Nominatim, keyless)
+      // Address Geocoding
       async function geocodeAddress(query) {
         try {
           const resp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`);
@@ -2004,7 +2011,7 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
           });
         });
 
-        // Live Quick-Tap (Gemini 4 Hydrogen) toggle
+        // Live Quick-Tap toggle
         $('btnLiveQuickTap').addEventListener('click', () => {
           const hasKey = Boolean(storage.get(STORAGE_KEYS.geminiKey));
           if (!state.liveQuickTap && !hasKey) {
@@ -2015,7 +2022,7 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
           state.liveQuickTap = !state.liveQuickTap;
           storage.set(STORAGE_KEYS.liveQuickTap, String(state.liveQuickTap));
           updateLiveQuickTapUI();
-          showToast(state.liveQuickTap ? 'Live Quick-Tap enabled (Gemini 4 Hydrogen)' : 'Live Quick-Tap paused (using local data)');
+          showToast(state.liveQuickTap ? 'Live Quick-Tap enabled' : 'Live Quick-Tap paused (using local data)');
           if (state.liveQuickTap && !state.customQuery) {
             runGeminiSearch('', state.activeCategory);
           }
@@ -2123,12 +2130,21 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
           const gKey = $('geminiKeyInput').value.trim();
           const gModel = $('geminiModelSelect').value;
           const mKey = $('googleMapsKeyInput').value.trim();
-          if (gKey) storage.set(STORAGE_KEYS.geminiKey, gKey); else storage.remove(STORAGE_KEYS.geminiKey);
+          if (gKey) {
+            storage.set(STORAGE_KEYS.geminiKey, gKey);
+            if (storage.get(STORAGE_KEYS.liveQuickTap) === null) {
+              storage.set(STORAGE_KEYS.liveQuickTap, 'true');
+              state.liveQuickTap = true;
+            }
+          } else {
+            storage.remove(STORAGE_KEYS.geminiKey);
+          }
           storage.set(STORAGE_KEYS.geminiModel, gModel);
           if (mKey) storage.set(STORAGE_KEYS.gmapsKey, mKey); else storage.remove(STORAGE_KEYS.gmapsKey);
           $('settingsModal').classList.remove('open');
           updateApiStatusUI();
-          showToast('API keys saved locally');
+          updateLiveQuickTapUI();
+          showToast('API keys saved locally to this browser');
           probeBestFreeModel(false);
         });
         $('btnClearKeys').addEventListener('click', () => {
@@ -2137,6 +2153,7 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
           $('geminiKeyInput').value = '';
           $('googleMapsKeyInput').value = '';
           updateApiStatusUI();
+          updateLiveQuickTapUI();
           showToast('Local keys cleared');
         });
 
@@ -2186,15 +2203,7 @@ Return ONLY a valid JSON array (no markdown fences, no commentary) of objects wi
 
       // Boot
       window.addEventListener('DOMContentLoaded', () => {
-        if (!storage.get(STORAGE_KEYS.seededDefault)) {
-          if (!storage.get(STORAGE_KEYS.geminiKey)) {
-            storage.set(STORAGE_KEYS.geminiKey, 'AQ.Ab8RN6ITWgyVPjunekNDV_o6T-VGKQQEqVPFylosP233Bix7Xg');
-          }
-          if (storage.get(STORAGE_KEYS.liveQuickTap) === null) {
-            storage.set(STORAGE_KEYS.liveQuickTap, 'true');
-          }
-          storage.set(STORAGE_KEYS.seededDefault, '1');
-        }
+        checkHashKeyProvisioning();
         state.liveQuickTap = storage.get(STORAGE_KEYS.liveQuickTap) === 'true';
         bindEvents();
         loadSavedSearches();
